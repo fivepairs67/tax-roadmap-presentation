@@ -243,6 +243,11 @@
                 <input id="horizon" type="range" min="3" max="20" step="1" value="10" />
                 <output id="horizonLabel">10년</output>
               </label>
+              <label>
+                <span>연 기대수익률</span>
+                <input id="expectedReturn" type="range" min="2" max="10" step="0.5" value="5.5" />
+                <output id="returnLabel">5.5%</output>
+              </label>
             </div>
           </form>
 
@@ -269,7 +274,7 @@
               <div class="allocation-visual">
                 <div id="donut" class="donut" aria-label="추천 계좌 배분"></div>
                 <div class="donut-center">
-                  <span>추천</span>
+                  <span>연간 배분</span>
                   <strong id="leadAccount">ISA</strong>
                 </div>
               </div>
@@ -277,8 +282,11 @@
             </div>
 
             <div class="timeline-panel">
-              <div>
-                <span>세후 자산 시뮬레이션</span>
+              <div class="timeline-copy">
+                <div>
+                  <span>동일 수익률 적립 시뮬레이션</span>
+                  <small id="chartAssumption">연 5.5% · 절세액 매년 재투자</small>
+                </div>
                 <strong id="gapMetric">차이 0만원</strong>
               </div>
               <canvas id="wealthChart" width="960" height="280" aria-label="일반 계좌와 최적 조합 비교 차트"></canvas>

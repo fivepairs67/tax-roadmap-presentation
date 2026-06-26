@@ -8,10 +8,16 @@ const accounts = [
 ];
 
 const personaDefaults = {
-  starter: { age: 35, annualAmount: 1800, foreignGain: 600, dividendIncome: 300, incomeBand: "standard", horizon: 10 },
-  taxShield: { age: 42, annualAmount: 2400, foreignGain: 300, dividendIncome: 400, incomeBand: "low", horizon: 12 },
-  global: { age: 38, annualAmount: 3200, foreignGain: 2200, dividendIncome: 500, incomeBand: "standard", horizon: 10 },
-  retirement: { age: 50, annualAmount: 2800, foreignGain: 400, dividendIncome: 600, incomeBand: "standard", horizon: 18 },
+  starter: { age: 35, annualAmount: 1800, foreignGain: 600, dividendIncome: 300, incomeBand: "standard", horizon: 10, expectedReturn: 5.5 },
+  taxShield: { age: 42, annualAmount: 2400, foreignGain: 300, dividendIncome: 400, incomeBand: "low", horizon: 12, expectedReturn: 5.5 },
+  global: { age: 38, annualAmount: 3200, foreignGain: 2200, dividendIncome: 500, incomeBand: "standard", horizon: 10, expectedReturn: 6.5 },
+  retirement: { age: 50, annualAmount: 2800, foreignGain: 400, dividendIncome: 600, incomeBand: "standard", horizon: 18, expectedReturn: 5 },
+};
+
+const LIMITS = {
+  isaAnnual: 2000,
+  pensionCredit: 600,
+  pensionTotalCredit: 900,
 };
 
 const state = { persona: "starter", ...personaDefaults.starter };
@@ -43,80 +49,102 @@ function normalizeAllocation(raw) {
   return normalized;
 }
 
-function buildAllocation() {
-  const raw = {
-    isa: 30,
-    pension: 16,
-    irp: 8,
-    dc: 8,
-    domestic: 24,
-    foreign: 14,
-  };
+function normalizeAmountsToAnnual(amounts, annual) {
+  const next = { ...amounts };
+  const nonDomesticKeys = accounts.map(({ key }) => key).filter((key) => key !== "domestic");
+  const nonDomesticTotal = nonDomesticKeys.reduce((sum, key) => sum + Math.max(0, next[key] ?? 0), 0);
+  if (nonDomesticTotal > annual) {
+    const scale = annual / nonDomesticTotal;
+    nonDomesticKeys.forEach((key) => {
+      next[key] = (next[key] ?? 0) * scale;
+    });
+    next.domestic = 0;
+  } else {
+    next.domestic = Math.max(0, annual - nonDomesticTotal);
+  }
+  return Object.fromEntries(accounts.map(({ key }) => [key, Math.max(0, next[key] ?? 0)]));
+}
 
-  if (state.persona === "starter") {
-    raw.isa += 18;
-    raw.domestic += 8;
-    raw.irp -= 7;
-    raw.foreign -= 6;
+function buildPlan() {
+  const annual = Math.max(0, state.annualAmount);
+  const isLowIncome = state.incomeBand === "low";
+  const isShort = state.horizon <= 5;
+  const isLong = state.horizon >= 15;
+  const foreignPressure = state.foreignGain > 250 ? Math.min(1, (state.foreignGain - 250) / 2750) : 0;
+  const dividendPressure = state.dividendIncome >= 1000 ? Math.min(1, state.dividendIncome / 2500) : 0;
+
+  if (annual <= 900) {
+    const smallAmounts = normalizeAmountsToAnnual(
+      {
+        isa: annual * (isShort ? 0.7 : 0.62),
+        pension: annual * (isLong ? 0.14 : 0.08),
+        irp: 0,
+        dc: annual * (state.persona === "retirement" ? 0.06 : 0.02),
+        foreign: annual * (state.persona === "global" ? 0.1 : 0.04),
+      },
+      annual,
+    );
+    return { amountByAccount: smallAmounts, allocation: normalizeAllocation(smallAmounts) };
   }
 
-  if (state.persona === "taxShield") {
-    raw.pension += 20;
-    raw.irp += 14;
-    raw.isa -= 6;
-    raw.domestic -= 12;
-    raw.foreign -= 5;
-  }
+  const isaBase =
+    state.persona === "starter" ? 0.42 :
+    state.persona === "global" ? 0.34 :
+    state.persona === "taxShield" ? 0.26 :
+    0.24;
+  const pensionBase =
+    state.persona === "taxShield" ? 0.25 :
+    state.persona === "retirement" ? 0.2 :
+    0.11;
+  const irpBase =
+    state.persona === "taxShield" ? 0.13 :
+    state.persona === "retirement" ? 0.11 :
+    0.035;
+  const dcBase =
+    state.persona === "retirement" ? 0.13 :
+    isLong || state.age >= 50 ? 0.08 :
+    0.035;
+  const foreignBase =
+    state.persona === "global" ? 0.24 :
+    state.persona === "starter" ? 0.06 :
+    0.1;
 
-  if (state.persona === "global") {
-    raw.foreign += 22;
-    raw.isa += 8;
-    raw.domestic -= 12;
-    raw.dc -= 4;
-  }
+  const isaTarget = Math.min(
+    LIMITS.isaAnnual,
+    annual * (isaBase + dividendPressure * 0.05 + foreignPressure * 0.04 - (isLong ? 0.03 : 0)),
+  );
+  const pensionTarget = Math.min(
+    LIMITS.pensionCredit,
+    annual * (pensionBase + (isLowIncome ? 0.04 : 0) + (isLong ? 0.05 : 0) + (state.age >= 50 ? 0.03 : 0)),
+  );
+  const irpLimit = Math.max(0, LIMITS.pensionTotalCredit - pensionTarget);
+  const irpTarget = Math.min(
+    irpLimit,
+    annual * (irpBase + (isLong ? 0.03 : 0) + (state.age >= 50 ? 0.02 : 0)),
+  );
+  const dcTarget = annual * dcBase;
+  const foreignTarget = annual * Math.max(
+    0.03,
+    foreignBase - foreignPressure * 0.08 - (state.age >= 50 ? 0.03 : 0),
+  );
+  const amounts = normalizeAmountsToAnnual(
+    {
+      isa: isaTarget,
+      pension: pensionTarget,
+      irp: irpTarget,
+      dc: dcTarget,
+      foreign: foreignTarget,
+    },
+    annual,
+  );
 
-  if (state.persona === "retirement") {
-    raw.pension += 16;
-    raw.irp += 12;
-    raw.dc += 14;
-    raw.foreign -= 10;
-    raw.domestic -= 8;
-  }
-
-  if (state.age >= 50) {
-    raw.pension += 6;
-    raw.irp += 5;
-    raw.dc += 5;
-    raw.foreign -= 6;
-  }
-
-  if (state.foreignGain > 1500) {
-    raw.foreign -= 6;
-    raw.isa += 4;
-    raw.domestic += 2;
-  }
-
-  if (state.annualAmount < 1200) {
-    raw.isa += 10;
-    raw.pension -= 4;
-    raw.irp -= 4;
-  }
-
-  if (state.horizon >= 15) {
-    raw.pension += 6;
-    raw.dc += 4;
-    raw.domestic -= 5;
-  }
-
-  return normalizeAllocation(raw);
+  return { amountByAccount: amounts, allocation: normalizeAllocation(amounts) };
 }
 
 function calculate() {
-  const allocation = buildAllocation();
+  const { allocation, amountByAccount } = buildPlan();
   const annual = state.annualAmount;
-  const expectedReturn = 0.055;
-
-  const amountByAccount = Object.fromEntries(accounts.map(({ key }) => [key, annual * (allocation[key] / 100)]));
+  const expectedReturn = state.expectedReturn / 100;
   const pensionEligible = Math.min(amountByAccount.pension, 600);
   const irpEligible = Math.min(amountByAccount.irp, Math.max(0, 900 - pensionEligible));
   const creditRate = state.incomeBand === "low" ? 0.165 : 0.132;
@@ -135,10 +163,10 @@ function calculate() {
 
   const annualDefense = pensionCredit + isaSaving + foreignManagementSaving + dividendDeferral;
   const rate = expectedReturn;
-  const factor = ((1 + rate) ** state.horizon - 1) / rate;
+  const factor = futureValueFactor(rate, state.horizon);
   const compound = annualDefense * factor;
-  const regularWealth = annual * (((1 + rate * 0.82) ** state.horizon - 1) / (rate * 0.82 || 1));
-  const optimizedWealth = annual * (((1 + rate) ** state.horizon - 1) / (rate || 1)) + compound;
+  const regularWealth = annual * factor;
+  const optimizedWealth = (annual + annualDefense) * factor;
   const gap = optimizedWealth - regularWealth;
   const score = clamp(
     Math.round(
@@ -166,6 +194,12 @@ function calculate() {
     gap,
     score,
   };
+}
+
+function futureValueFactor(rate, years) {
+  if (years <= 0) return 0;
+  if (Math.abs(rate) < 0.00001) return years;
+  return ((1 + rate) ** years - 1) / rate;
 }
 
 function adviceFor(result) {
@@ -286,9 +320,10 @@ function updateLabels() {
   qs("#foreignGainLabel").textContent = formatManwon(state.foreignGain);
   qs("#dividendLabel").textContent = formatManwon(state.dividendIncome);
   qs("#horizonLabel").textContent = `${state.horizon}년`;
+  qs("#returnLabel").textContent = `${state.expectedReturn.toFixed(1)}%`;
 }
 
-function renderAllocation(allocation) {
+function renderAllocation(allocation, amountByAccount) {
   let cursor = 0;
   const stops = accounts
     .map(({ key, color }) => {
@@ -300,12 +335,20 @@ function renderAllocation(allocation) {
   qs("#donut").style.background = `conic-gradient(${stops})`;
   qs("#leadAccount").textContent = leadAccount(allocation);
   qs("#allocationBars").innerHTML = accounts
+    .map((account) => ({ ...account, amount: amountByAccount[account.key] ?? 0, percent: allocation[account.key] }))
     .map(
-      ({ key, label, color }) => `
+      ({ label, color, amount, percent }) => `
+        ${label === accounts[0].label ? `
+          <div class="allocation-note">
+            <span>향후 1년 투자/운용 배분</span>
+            <small>연간 투자 가능 금액 기준입니다. DC형은 신규 납입보다 퇴직연금 적립금 운용 점검 몫으로 보세요.</small>
+          </div>
+        ` : ""}
         <div class="allocation-row">
           <span>${label}</span>
-          <div class="allocation-track"><i style="width: ${allocation[key]}%; background: ${color}"></i></div>
-          <strong>${allocation[key]}%</strong>
+          <div class="allocation-track"><i style="width: ${percent}%; background: ${color}"></i></div>
+          <strong>${percent}%</strong>
+          <small>${formatManwon(amount)}</small>
         </div>
       `,
     )
@@ -324,9 +367,11 @@ function drawWealthChart(result) {
   const height = rect.height;
   context.clearRect(0, 0, width, height);
 
+  const rate = state.expectedReturn / 100;
   const points = Array.from({ length: state.horizon + 1 }, (_, year) => {
-    const regular = state.annualAmount * year * (1 + 0.045 * year * 0.5);
-    const optimized = regular + result.annualDefense * year * (1 + 0.055 * year * 0.45);
+    const factor = futureValueFactor(rate, year);
+    const regular = state.annualAmount * factor;
+    const optimized = (state.annualAmount + result.annualDefense) * factor;
     return { year, regular, optimized };
   });
   const maxValue = Math.max(...points.map((point) => point.optimized), 1);
@@ -384,16 +429,17 @@ function render() {
   const advice = adviceFor(result);
   qs("#savingMetric").textContent = formatManwon(result.annualDefense);
   qs("#compoundMetric").textContent = formatManwon(result.compound);
-  qs("#compoundCaption").textContent = `${state.horizon}년 복리 가정`;
+  qs("#compoundCaption").textContent = `연 ${state.expectedReturn.toFixed(1)}% · ${state.horizon}년 재투자`;
   qs("#scoreMetric").textContent = String(result.score);
   qs("#scoreCaption").textContent = result.score >= 78 ? "절세 우선" : result.score >= 62 ? "균형 조합" : "공격형 조합";
   qs("#gapMetric").textContent = `차이 ${formatManwon(result.gap)}`;
+  qs("#chartAssumption").textContent = `시장 예측이 아니라 연 ${state.expectedReturn.toFixed(1)}% 기대수익률 가정 · 절세액 매년 재투자`;
   qs("#oneLineAdvice").textContent = advice.title;
   qs("#actionItems").innerHTML = advice.items.map((item) => `<li>${item}</li>`).join("");
   qs("#heroTaxDrag").textContent = `연 ${formatManwon(result.annualDefense)}`;
   qs("#heroRegular").textContent = `세후 ${formatManwon(result.regularWealth)}`;
   qs("#heroOptimized").textContent = `세후 ${formatManwon(result.optimizedWealth)}`;
-  renderAllocation(result.allocation);
+  renderAllocation(result.allocation, result.amountByAccount);
   drawWealthChart(result);
 }
 
@@ -401,7 +447,7 @@ function applyPersona(persona) {
   state.persona = persona;
   Object.assign(state, personaDefaults[persona]);
   qsa(".persona-switch button").forEach((button) => button.classList.toggle("active", button.dataset.value === persona));
-  ["age", "annualAmount", "foreignGain", "dividendIncome", "incomeBand", "horizon"].forEach((id) => {
+  ["age", "annualAmount", "foreignGain", "dividendIncome", "incomeBand", "horizon", "expectedReturn"].forEach((id) => {
     qs(`#${id}`).value = state[id];
   });
   render();
@@ -412,7 +458,7 @@ function bindControls() {
     button.addEventListener("click", () => applyPersona(button.dataset.value));
   });
 
-  ["age", "annualAmount", "foreignGain", "dividendIncome", "horizon"].forEach((id) => {
+  ["age", "annualAmount", "foreignGain", "dividendIncome", "horizon", "expectedReturn"].forEach((id) => {
     qs(`#${id}`).addEventListener("input", (event) => {
       state[id] = Number(event.target.value);
       render();
