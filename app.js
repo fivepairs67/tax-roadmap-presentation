@@ -1,239 +1,242 @@
-const accountMeta = [
-  { key: "isa", label: "ISA", color: "#16806f" },
-  { key: "pension", label: "연금저축", color: "#b67818" },
-  { key: "irp", label: "IRP", color: "#d19a3a" },
-  { key: "dc", label: "DC형", color: "#386fae" },
-  { key: "domestic", label: "국내직투", color: "#7f8b86" },
-  { key: "foreign", label: "해외직투", color: "#c43b52" },
+const accounts = [
+  { key: "isa", label: "ISA", color: "#39d795" },
+  { key: "pension", label: "연금저축", color: "#ffc267" },
+  { key: "irp", label: "IRP", color: "#f59e59" },
+  { key: "dc", label: "DC형", color: "#7095ff" },
+  { key: "domestic", label: "국내직투", color: "#8792a8" },
+  { key: "foreign", label: "해외직투", color: "#ff7b78" },
 ];
 
-const state = {
-  experience: "beginner",
-  goal: "cash",
-  age: 35,
-  annualAmount: 1200,
-  targetAmount: 10000,
-  incomeBand: "standard",
-  overseas: "medium",
-  returnRate: 5,
+const personaDefaults = {
+  starter: { age: 35, annualAmount: 1800, foreignGain: 600, dividendIncome: 300, incomeBand: "standard", horizon: 10 },
+  taxShield: { age: 42, annualAmount: 2400, foreignGain: 300, dividendIncome: 400, incomeBand: "low", horizon: 12 },
+  global: { age: 38, annualAmount: 3200, foreignGain: 2200, dividendIncome: 500, incomeBand: "standard", horizon: 10 },
+  retirement: { age: 50, annualAmount: 2800, foreignGain: 400, dividendIncome: 600, incomeBand: "standard", horizon: 18 },
 };
 
-const slideIds = ["opening", "account-map", "simulator", "takeaway"];
-let activeSlideIndex = 0;
+const state = { persona: "starter", ...personaDefaults.starter };
+const sceneIds = ["hero", "map", "research", "simulator", "playbook"];
+let activeScene = 0;
+let heroFrame = 0;
 
-const formatWon = (won) => {
-  const value = Math.round(won / 10000);
-  if (value >= 10000) {
-    const eok = value / 10000;
+const qs = (selector) => document.querySelector(selector);
+const qsa = (selector) => [...document.querySelectorAll(selector)];
+
+const formatManwon = (value) => {
+  const rounded = Math.round(value);
+  if (rounded >= 10000) {
+    const eok = rounded / 10000;
     return `${eok.toLocaleString("ko-KR", { maximumFractionDigits: eok >= 10 ? 0 : 1 })}억원`;
   }
-  return `${value.toLocaleString("ko-KR", { maximumFractionDigits: 0 })}만원`;
+  return `${rounded.toLocaleString("ko-KR")}만원`;
 };
 
-const formatManwon = (manwon) => {
-  if (manwon >= 10000) {
-    const eok = manwon / 10000;
-    return `${eok.toLocaleString("ko-KR", { maximumFractionDigits: eok >= 10 ? 0 : 1 })}억원`;
-  }
-  return `${manwon.toLocaleString("ko-KR")}만원`;
-};
+const clamp = (value, min, max) => Math.min(max, Math.max(min, value));
 
-const normalizeAllocation = (raw) => {
-  const safe = Object.fromEntries(
-    accountMeta.map(({ key }) => [key, Math.max(0, raw[key] ?? 0)]),
-  );
+function normalizeAllocation(raw) {
+  const safe = Object.fromEntries(accounts.map(({ key }) => [key, Math.max(0, raw[key] ?? 0)]));
   const total = Object.values(safe).reduce((sum, value) => sum + value, 0) || 1;
-  return Object.fromEntries(
-    Object.entries(safe).map(([key, value]) => [key, Math.round((value / total) * 100)]),
-  );
-};
+  const normalized = Object.fromEntries(Object.entries(safe).map(([key, value]) => [key, Math.round((value / total) * 100)]));
+  const diff = 100 - Object.values(normalized).reduce((sum, value) => sum + value, 0);
+  const largest = accounts.map(({ key }) => key).sort((a, b) => normalized[b] - normalized[a])[0];
+  normalized[largest] += diff;
+  return normalized;
+}
 
-const fixRoundedTotal = (allocation) => {
-  const entries = accountMeta.map(({ key }) => [key, allocation[key]]);
-  const total = entries.reduce((sum, [, value]) => sum + value, 0);
-  const diff = 100 - total;
-  if (diff === 0) return allocation;
-  const largest = entries.reduce((best, item) => (item[1] > best[1] ? item : best), entries[0]);
-  return { ...allocation, [largest[0]]: largest[1] + diff };
-};
-
-const buildAllocation = () => {
+function buildAllocation() {
   const raw = {
-    isa: 35,
-    pension: 18,
+    isa: 30,
+    pension: 16,
     irp: 8,
     dc: 8,
-    domestic: 21,
-    foreign: 10,
+    domestic: 24,
+    foreign: 14,
   };
 
-  if (state.goal === "tax") {
-    raw.pension += 18;
-    raw.irp += 16;
-    raw.isa -= 8;
-    raw.domestic -= 12;
-  }
-  if (state.goal === "retirement") {
-    raw.pension += 18;
-    raw.irp += 14;
-    raw.dc += 12;
-    raw.domestic -= 11;
-    raw.foreign -= 7;
-  }
-  if (state.goal === "cash") {
+  if (state.persona === "starter") {
     raw.isa += 18;
     raw.domestic += 8;
-    raw.irp -= 9;
-    raw.pension -= 7;
+    raw.irp -= 7;
+    raw.foreign -= 6;
   }
 
-  if (state.experience === "beginner") {
+  if (state.persona === "taxShield") {
+    raw.pension += 20;
+    raw.irp += 14;
+    raw.isa -= 6;
+    raw.domestic -= 12;
+    raw.foreign -= 5;
+  }
+
+  if (state.persona === "global") {
+    raw.foreign += 22;
     raw.isa += 8;
-    raw.domestic += 5;
-    raw.foreign -= 7;
-    raw.irp -= 3;
-  } else {
-    raw.foreign += 6;
-    raw.isa += 4;
+    raw.domestic -= 12;
+    raw.dc -= 4;
   }
 
-  if (state.overseas === "low") {
+  if (state.persona === "retirement") {
+    raw.pension += 16;
+    raw.irp += 12;
+    raw.dc += 14;
     raw.foreign -= 10;
-    raw.isa += 7;
-    raw.domestic += 3;
-  }
-  if (state.overseas === "high") {
-    raw.foreign += 18;
-    raw.domestic -= 6;
-    raw.dc -= 3;
+    raw.domestic -= 8;
   }
 
   if (state.age >= 50) {
     raw.pension += 6;
-    raw.irp += 6;
-    raw.dc += 4;
+    raw.irp += 5;
+    raw.dc += 5;
     raw.foreign -= 6;
   }
-  if (state.age <= 30 && state.goal !== "retirement") {
-    raw.isa += 6;
-    raw.foreign += state.overseas === "high" ? 4 : 1;
-    raw.irp -= 3;
+
+  if (state.foreignGain > 1500) {
+    raw.foreign -= 6;
+    raw.isa += 4;
+    raw.domestic += 2;
   }
 
-  if (state.targetAmount > state.annualAmount * 10 && state.goal === "cash") {
-    raw.isa += 6;
-    raw.domestic += 5;
-    raw.pension -= 5;
+  if (state.annualAmount < 1200) {
+    raw.isa += 10;
+    raw.pension -= 4;
+    raw.irp -= 4;
   }
 
-  return fixRoundedTotal(normalizeAllocation(raw));
-};
+  if (state.horizon >= 15) {
+    raw.pension += 6;
+    raw.dc += 4;
+    raw.domestic -= 5;
+  }
 
-const calculateScenario = () => {
+  return normalizeAllocation(raw);
+}
+
+function calculate() {
   const allocation = buildAllocation();
-  const annualWon = state.annualAmount * 10000;
-  const rate = state.returnRate / 100;
-  const amounts = Object.fromEntries(
-    accountMeta.map(({ key }) => [key, annualWon * (allocation[key] / 100)]),
-  );
+  const annual = state.annualAmount;
+  const expectedReturn = 0.055;
 
-  const pensionEligible = Math.min(amounts.pension, 6_000_000);
-  const irpEligible = Math.min(amounts.irp, Math.max(0, 9_000_000 - pensionEligible));
+  const amountByAccount = Object.fromEntries(accounts.map(({ key }) => [key, annual * (allocation[key] / 100)]));
+  const pensionEligible = Math.min(amountByAccount.pension, 600);
+  const irpEligible = Math.min(amountByAccount.irp, Math.max(0, 900 - pensionEligible));
   const creditRate = state.incomeBand === "low" ? 0.165 : 0.132;
-  const pensionTaxCredit = (pensionEligible + irpEligible) * creditRate;
+  const pensionCredit = (pensionEligible + irpEligible) * creditRate;
 
-  const isaThreeYearGain = amounts.isa * rate * 3;
-  const isaExemption = state.incomeBand === "low" ? 4_000_000 : 2_000_000;
-  const regularIsaTax = isaThreeYearGain * 0.154;
-  const isaTax = Math.max(0, isaThreeYearGain - isaExemption) * 0.099;
-  const isaTaxSaving = Math.max(0, regularIsaTax - isaTax) / 3;
+  const isaGain = amountByAccount.isa * expectedReturn * 3;
+  const isaExemption = state.incomeBand === "low" ? 400 : 200;
+  const regularIsaTax = isaGain * 0.154;
+  const isaTax = Math.max(0, isaGain - isaExemption) * 0.099;
+  const isaSaving = Math.max(0, regularIsaTax - isaTax) / 3;
 
-  const foreignGain = amounts.foreign * rate;
-  const foreignTax = Math.max(0, foreignGain - 2_500_000) * 0.22;
-  const annualTaxValue = pensionTaxCredit + isaTaxSaving;
-  const annuityFactor = rate > 0 ? ((1 + rate) ** 10 - 1) / rate : 10;
-  const compoundValue = annualTaxValue * annuityFactor;
-  const defenseScore = Math.max(
-    0,
-    Math.min(
-      100,
-      Math.round(
-        50 +
-          allocation.isa * 0.22 +
-          (allocation.pension + allocation.irp) * 0.28 +
-          allocation.dc * 0.08 -
-          allocation.foreign * 0.22 +
-          (annualTaxValue / Math.max(annualWon, 1)) * 180,
-      ),
+  const foreignTax = Math.max(0, state.foreignGain - 250) * 0.22;
+  const foreignManagementSaving = foreignTax * Math.min(0.7, allocation.isa / 100 + allocation.domestic / 220);
+  const dividendTax = state.dividendIncome * 0.154;
+  const dividendDeferral = dividendTax * ((allocation.isa + allocation.pension + allocation.irp + allocation.dc) / 100) * 0.35;
+
+  const annualDefense = pensionCredit + isaSaving + foreignManagementSaving + dividendDeferral;
+  const rate = expectedReturn;
+  const factor = ((1 + rate) ** state.horizon - 1) / rate;
+  const compound = annualDefense * factor;
+  const regularWealth = annual * (((1 + rate * 0.82) ** state.horizon - 1) / (rate * 0.82 || 1));
+  const optimizedWealth = annual * (((1 + rate) ** state.horizon - 1) / (rate || 1)) + compound;
+  const gap = optimizedWealth - regularWealth;
+  const score = clamp(
+    Math.round(
+      48 +
+        allocation.isa * 0.19 +
+        (allocation.pension + allocation.irp) * 0.22 +
+        allocation.dc * 0.1 -
+        allocation.foreign * 0.13 +
+        (annualDefense / Math.max(annual, 1)) * 95,
     ),
+    0,
+    100,
   );
 
   return {
     allocation,
-    amounts,
-    pensionTaxCredit,
-    isaTaxSaving,
+    amountByAccount,
+    pensionCredit,
+    isaSaving,
     foreignTax,
-    annualTaxValue,
-    compoundValue,
-    defenseScore,
+    annualDefense,
+    compound,
+    regularWealth,
+    optimizedWealth,
+    gap,
+    score,
   };
-};
+}
 
-const adviceFor = (scenario) => {
-  if (state.goal === "tax") {
+function adviceFor(result) {
+  if (state.persona === "taxShield") {
     return {
-      line: "연말정산 방어가 목적이면 연금저축 600만원과 IRP 보강 한도를 먼저 확인하세요.",
+      title: "연말정산이 목표라면 연금저축 600만원 축을 먼저 채우고 IRP는 오래 묶어도 되는 돈으로 보강하세요.",
       items: [
-        `세액공제 예상치는 ${formatWon(scenario.pensionTaxCredit)}입니다.`,
-        "중도 인출 제약이 큰 돈은 IRP보다 ISA나 일반 계좌에 남겨 둡니다.",
-        "연금 계좌는 절세가 강하지만 유동성 비용도 같이 관리해야 합니다.",
+        `세액공제 추정 기여분은 연 ${formatManwon(result.pensionCredit)}입니다.`,
+        "환급액은 소비 예산이 아니라 다음 해 납입 원금으로 다시 넣어야 복리 효과가 살아납니다.",
+        "3년 안에 쓸 돈은 IRP 대신 ISA나 현금성 자산으로 분리합니다.",
       ],
     };
   }
 
-  if (state.goal === "retirement") {
+  if (state.persona === "global") {
     return {
-      line: "장기 노후 준비라면 연금저축·IRP·DC형을 한 묶음으로 보고 과세이연 시간을 확보하세요.",
+      title: "미국 직투는 세전 수익률이 아니라 250만원 공제 이후의 세후 수익률로 판단해야 합니다.",
       items: [
-        "노후 목적 자금은 세액공제와 과세이연이 동시에 작동하는 계좌를 우선합니다.",
-        `현재 조합은 연 ${formatWon(scenario.annualTaxValue)} 정도를 다시 굴릴 여지를 만듭니다.`,
-        "위험자산 비중은 나이보다 은퇴까지 남은 기간과 현금흐름으로 조정합니다.",
+        `현재 해외주식 양도세 노출 추정치는 연 ${formatManwon(result.foreignTax)}입니다.`,
+        "해외 상장 ETF 직접투자와 국내 상장 해외 ETF의 세금·환율·상품비용을 같이 비교합니다.",
+        "실현이익을 한 해에 몰지 말고 손실 통산과 매도 시점을 함께 계획합니다.",
       ],
     };
   }
 
-  if (state.overseas === "high") {
+  if (state.persona === "retirement") {
     return {
-      line: "미국 직투 비중이 높다면 수익률만큼이나 실현이익 250만원 초과 구간을 관리해야 합니다.",
+      title: "노후자금은 연금저축·IRP·DC형을 분리하지 말고 하나의 장기 포트폴리오로 봐야 합니다.",
       items: [
-        `해외직투 세금 노출 추정치는 연 ${formatWon(scenario.foreignTax)}입니다.`,
-        "해외 ETF 대체 노출은 ISA나 연금 계좌 안의 국내 상장 ETF와 비교합니다.",
-        "실현 시점, 손실 통산, 환율을 같이 관리해야 세후 수익률이 흔들리지 않습니다.",
+        `기간 누적 재투자 여력은 약 ${formatManwon(result.compound)}입니다.`,
+        "DC형 퇴직연금이 원리금보장 상품에 방치되어 있는지 먼저 확인합니다.",
+        "연금 수령 나이와 수령 기간을 정해야 중도해지 리스크를 줄일 수 있습니다.",
       ],
     };
   }
 
   return {
-    line: "3년 안에 쓸 목돈은 ISA를 중심으로 두고, 연금 계좌는 오래 묶어도 되는 금액만 넣으세요.",
+    title: "초보자는 세금보다 유동성이 먼저입니다. ISA를 중심으로 3년 돈의 그릇을 만들고 연금계좌는 작게 시작하세요.",
     items: [
-      `추천 조합에서 ISA 비중은 ${scenario.allocation.isa}%입니다.`,
-      `10년 재투자 가치 추정치는 ${formatWon(scenario.compoundValue)}입니다.`,
-      "목돈 계좌와 노후 계좌를 분리하면 수익률보다 중요한 출금 타이밍을 지킬 수 있습니다.",
+      `추천 조합의 1순위 계좌는 ${leadAccount(result.allocation)}입니다.`,
+      "목돈 계좌와 노후 계좌를 분리하면 급한 지출 때문에 장기 계좌를 깨는 일을 줄일 수 있습니다.",
+      "일반 계좌는 완전히 배제하는 곳이 아니라 유동성과 개별 종목 학습을 담당하는 공간입니다.",
     ],
   };
-};
+}
 
-const updateLabels = () => {
-  document.querySelector("#ageLabel").textContent = `${state.age}세`;
-  document.querySelector("#amountLabel").textContent = formatManwon(state.annualAmount);
-  document.querySelector("#targetLabel").textContent = formatManwon(state.targetAmount);
-  document.querySelector("#returnLabel").textContent = `연 ${state.returnRate.toFixed(1)}%`;
-};
+function leadAccount(allocation) {
+  const top = accounts.map((item) => ({ ...item, value: allocation[item.key] })).sort((a, b) => b.value - a.value)[0];
+  return top.label;
+}
 
-const renderAllocationBars = (allocation) => {
-  const container = document.querySelector("#allocationBars");
-  container.innerHTML = accountMeta
+function updateLabels() {
+  qs("#ageLabel").textContent = `${state.age}세`;
+  qs("#amountLabel").textContent = formatManwon(state.annualAmount);
+  qs("#foreignGainLabel").textContent = formatManwon(state.foreignGain);
+  qs("#dividendLabel").textContent = formatManwon(state.dividendIncome);
+  qs("#horizonLabel").textContent = `${state.horizon}년`;
+}
+
+function renderAllocation(allocation) {
+  let cursor = 0;
+  const stops = accounts
+    .map(({ key, color }) => {
+      const start = cursor;
+      cursor += allocation[key] * 3.6;
+      return `${color} ${start.toFixed(2)}deg ${cursor.toFixed(2)}deg`;
+    })
+    .join(", ");
+  qs("#donut").style.background = `conic-gradient(${stops})`;
+  qs("#leadAccount").textContent = leadAccount(allocation);
+  qs("#allocationBars").innerHTML = accounts
     .map(
       ({ key, label, color }) => `
         <div class="allocation-row">
@@ -244,127 +247,214 @@ const renderAllocationBars = (allocation) => {
       `,
     )
     .join("");
-};
+}
 
-const renderDonut = (allocation) => {
-  let cursor = 0;
-  const stops = accountMeta
-    .map(({ key, color }) => {
-      const start = cursor;
-      cursor += allocation[key] * 3.6;
-      return `${color} ${start.toFixed(1)}deg ${cursor.toFixed(1)}deg`;
-    })
-    .join(", ");
-  document.querySelector("#allocationDonut").style.background = `conic-gradient(${stops})`;
-};
+function drawWealthChart(result) {
+  const canvas = qs("#wealthChart");
+  const context = canvas.getContext("2d");
+  const pixelRatio = window.devicePixelRatio || 1;
+  const rect = canvas.getBoundingClientRect();
+  canvas.width = Math.max(1, Math.floor(rect.width * pixelRatio));
+  canvas.height = Math.max(1, Math.floor(rect.height * pixelRatio));
+  context.scale(pixelRatio, pixelRatio);
+  const width = rect.width;
+  const height = rect.height;
+  context.clearRect(0, 0, width, height);
 
-const renderScenario = () => {
+  const points = Array.from({ length: state.horizon + 1 }, (_, year) => {
+    const regular = state.annualAmount * year * (1 + 0.045 * year * 0.5);
+    const optimized = regular + result.annualDefense * year * (1 + 0.055 * year * 0.45);
+    return { year, regular, optimized };
+  });
+  const maxValue = Math.max(...points.map((point) => point.optimized), 1);
+  const left = 42;
+  const right = 18;
+  const top = 18;
+  const bottom = 36;
+  const chartWidth = width - left - right;
+  const chartHeight = height - top - bottom;
+  const x = (index) => left + (index / (points.length - 1 || 1)) * chartWidth;
+  const y = (value) => top + chartHeight - (value / maxValue) * chartHeight;
+
+  context.strokeStyle = "#e5e9f2";
+  context.lineWidth = 1;
+  context.font = "12px system-ui, sans-serif";
+  context.fillStyle = "#7a8497";
+  for (let i = 0; i <= 4; i += 1) {
+    const yy = top + (chartHeight / 4) * i;
+    context.beginPath();
+    context.moveTo(left, yy);
+    context.lineTo(width - right, yy);
+    context.stroke();
+  }
+
+  const drawLine = (key, color, widthLine) => {
+    context.beginPath();
+    points.forEach((point, index) => {
+      const xx = x(index);
+      const yy = y(point[key]);
+      if (index === 0) context.moveTo(xx, yy);
+      else context.lineTo(xx, yy);
+    });
+    context.strokeStyle = color;
+    context.lineWidth = widthLine;
+    context.lineCap = "round";
+    context.lineJoin = "round";
+    context.stroke();
+  };
+
+  drawLine("regular", "#8792a8", 3);
+  drawLine("optimized", "#20bd82", 4);
+
+  context.fillStyle = "#111827";
+  context.font = "700 12px system-ui, sans-serif";
+  context.fillText("일반", width - right - 84, y(points.at(-1).regular) + 4);
+  context.fillText("절세 조합", width - right - 84, y(points.at(-1).optimized) - 8);
+  context.fillStyle = "#7a8497";
+  context.fillText("0", left - 10, height - bottom + 18);
+  context.fillText(`${state.horizon}년`, width - right - 28, height - bottom + 18);
+}
+
+function render() {
   updateLabels();
-  const scenario = calculateScenario();
-  const advice = adviceFor(scenario);
+  const result = calculate();
+  const advice = adviceFor(result);
+  qs("#savingMetric").textContent = formatManwon(result.annualDefense);
+  qs("#compoundMetric").textContent = formatManwon(result.compound);
+  qs("#compoundCaption").textContent = `${state.horizon}년 복리 가정`;
+  qs("#scoreMetric").textContent = String(result.score);
+  qs("#scoreCaption").textContent = result.score >= 78 ? "절세 우선" : result.score >= 62 ? "균형 조합" : "공격형 조합";
+  qs("#gapMetric").textContent = `차이 ${formatManwon(result.gap)}`;
+  qs("#oneLineAdvice").textContent = advice.title;
+  qs("#actionItems").innerHTML = advice.items.map((item) => `<li>${item}</li>`).join("");
+  qs("#heroTaxDrag").textContent = `연 ${formatManwon(result.annualDefense)}`;
+  qs("#heroRegular").textContent = `세후 ${formatManwon(result.regularWealth)}`;
+  qs("#heroOptimized").textContent = `세후 ${formatManwon(result.optimizedWealth)}`;
+  renderAllocation(result.allocation);
+  drawWealthChart(result);
+}
 
-  document.querySelector("#taxSavingMetric").textContent = formatWon(scenario.annualTaxValue);
-  document.querySelector("#compoundMetric").textContent = formatWon(scenario.compoundValue);
-  document.querySelector("#foreignTaxMetric").textContent = formatWon(scenario.foreignTax);
-  document.querySelector("#heroBenefit").textContent = formatWon(scenario.compoundValue);
-  document.querySelector("#defenseScore").textContent = String(scenario.defenseScore);
-  document.querySelector("#scoreLabel").textContent =
-    scenario.defenseScore >= 75 ? "절세 우선 조합" : scenario.defenseScore >= 58 ? "균형 조합" : "공격형 조합";
-  document.querySelector("#savingBarLabel").textContent = formatWon(scenario.annualTaxValue);
-  document.querySelector("#oneLineAdvice").textContent = advice.line;
-  document.querySelector("#actionItems").innerHTML = advice.items.map((item) => `<li>${item}</li>`).join("");
+function applyPersona(persona) {
+  state.persona = persona;
+  Object.assign(state, personaDefaults[persona]);
+  qsa(".persona-switch button").forEach((button) => button.classList.toggle("active", button.dataset.value === persona));
+  ["age", "annualAmount", "foreignGain", "dividendIncome", "incomeBand", "horizon"].forEach((id) => {
+    qs(`#${id}`).value = state[id];
+  });
+  render();
+}
 
-  const regularTaxLoad = Math.max(scenario.annualTaxValue + scenario.foreignTax, 1);
-  const optimizedRetained = Math.max(scenario.annualTaxValue, 1);
-  const maxBar = Math.max(regularTaxLoad, optimizedRetained);
-  document.querySelector("#taxableBar").style.width = `${Math.max(10, (regularTaxLoad / maxBar) * 100)}%`;
-  document.querySelector("#optimizedBar").style.width = `${Math.max(10, (optimizedRetained / maxBar) * 100)}%`;
-
-  renderAllocationBars(scenario.allocation);
-  renderDonut(scenario.allocation);
-};
-
-const setSegmented = (button) => {
-  const field = button.dataset.field;
-  const value = button.dataset.value;
-  if (!field || !value) return;
-  state[field] = value;
-  document
-    .querySelectorAll(`button[data-field="${field}"]`)
-    .forEach((item) => item.classList.toggle("active", item === button));
-  renderScenario();
-};
-
-const bindControls = () => {
-  document.querySelectorAll(".segmented button").forEach((button) => {
-    button.addEventListener("click", () => setSegmented(button));
+function bindControls() {
+  qsa(".persona-switch button").forEach((button) => {
+    button.addEventListener("click", () => applyPersona(button.dataset.value));
   });
 
-  ["goal", "incomeBand"].forEach((id) => {
-    const element = document.querySelector(`#${id}`);
-    element.addEventListener("change", () => {
-      state[id] = element.value;
-      renderScenario();
+  ["age", "annualAmount", "foreignGain", "dividendIncome", "horizon"].forEach((id) => {
+    qs(`#${id}`).addEventListener("input", (event) => {
+      state[id] = Number(event.target.value);
+      render();
     });
   });
 
-  ["age", "annualAmount", "targetAmount", "returnRate"].forEach((id) => {
-    const element = document.querySelector(`#${id}`);
-    element.addEventListener("input", () => {
-      state[id] = Number(element.value);
-      renderScenario();
-    });
+  qs("#incomeBand").addEventListener("change", (event) => {
+    state.incomeBand = event.target.value;
+    render();
   });
-};
+}
 
-const goToSlide = (index) => {
-  activeSlideIndex = Math.max(0, Math.min(slideIds.length - 1, index));
-  const id = slideIds[activeSlideIndex];
-  document.querySelector(`#${id}`).scrollIntoView({ behavior: "smooth", block: "start" });
-  updateNav();
-};
+function goToScene(index) {
+  activeScene = clamp(index, 0, sceneIds.length - 1);
+  qs(`#${sceneIds[activeScene]}`).scrollIntoView({ behavior: "smooth", block: "start" });
+  updateSceneUI();
+}
 
-const updateNav = () => {
-  const id = slideIds[activeSlideIndex];
-  document.querySelectorAll(".deck-nav button").forEach((button) => {
-    button.classList.toggle("active", button.dataset.target === id);
-  });
-  document.querySelector("#slideCounter").textContent = `${activeSlideIndex + 1} / ${slideIds.length}`;
-};
+function updateSceneUI() {
+  qs("#sceneCounter").textContent = `${activeScene + 1} / ${sceneIds.length}`;
+}
 
-const bindDeck = () => {
-  document.querySelectorAll(".deck-nav button").forEach((button) => {
-    button.addEventListener("click", () => {
-      const index = slideIds.indexOf(button.dataset.target);
-      if (index >= 0) goToSlide(index);
-    });
-  });
-
-  document.querySelector("#prevSlide").addEventListener("click", () => goToSlide(activeSlideIndex - 1));
-  document.querySelector("#nextSlide").addEventListener("click", () => goToSlide(activeSlideIndex + 1));
-
+function bindDeck() {
+  qs("#prevScene").addEventListener("click", () => goToScene(activeScene - 1));
+  qs("#nextScene").addEventListener("click", () => goToScene(activeScene + 1));
   document.addEventListener("keydown", (event) => {
-    const targetName = event.target?.tagName;
-    if (["INPUT", "SELECT", "TEXTAREA", "BUTTON"].includes(targetName)) return;
-    if (event.key === "ArrowRight" || event.key === "PageDown") goToSlide(activeSlideIndex + 1);
-    if (event.key === "ArrowLeft" || event.key === "PageUp") goToSlide(activeSlideIndex - 1);
+    const tag = event.target?.tagName;
+    if (["INPUT", "SELECT", "TEXTAREA", "BUTTON"].includes(tag)) return;
+    if (event.key === "ArrowRight" || event.key === "PageDown") goToScene(activeScene + 1);
+    if (event.key === "ArrowLeft" || event.key === "PageUp") goToScene(activeScene - 1);
   });
 
   const observer = new IntersectionObserver(
     (entries) => {
       const visible = entries
         .filter((entry) => entry.isIntersecting)
-        .sort((left, right) => right.intersectionRatio - left.intersectionRatio)[0];
+        .sort((a, b) => b.intersectionRatio - a.intersectionRatio)[0];
       if (!visible) return;
-      activeSlideIndex = slideIds.indexOf(visible.target.id);
-      updateNav();
+      activeScene = sceneIds.indexOf(visible.target.id);
+      updateSceneUI();
     },
-    { threshold: [0.45, 0.7] },
+    { threshold: [0.45, 0.72] },
   );
+  qsa("[data-scene]").forEach((scene) => observer.observe(scene));
 
-  document.querySelectorAll("[data-slide]").forEach((slide) => observer.observe(slide));
-};
+  window.addEventListener("scroll", () => {
+    const maxScroll = document.documentElement.scrollHeight - window.innerHeight;
+    qs("#progressLine").style.width = `${maxScroll > 0 ? (window.scrollY / maxScroll) * 100 : 0}%`;
+  }, { passive: true });
+}
 
+function animateHero() {
+  const canvas = qs("#heroCanvas");
+  const ctx = canvas.getContext("2d");
+  const ratio = window.devicePixelRatio || 1;
+  const rect = canvas.getBoundingClientRect();
+  canvas.width = Math.max(1, Math.floor(rect.width * ratio));
+  canvas.height = Math.max(1, Math.floor(rect.height * ratio));
+  ctx.scale(ratio, ratio);
+  const width = rect.width;
+  const height = rect.height;
+  ctx.clearRect(0, 0, width, height);
+  ctx.fillStyle = "#080b16";
+  ctx.fillRect(0, 0, width, height);
+
+  const lanes = [
+    { y: height * 0.28, color: "rgba(126,242,200,0.85)", speed: 0.8 },
+    { y: height * 0.46, color: "rgba(99,216,255,0.72)", speed: 0.55 },
+    { y: height * 0.64, color: "rgba(255,123,120,0.68)", speed: 0.38 },
+  ];
+
+  lanes.forEach((lane, laneIndex) => {
+    ctx.strokeStyle = "rgba(255,255,255,0.08)";
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.moveTo(0, lane.y);
+    for (let x = 0; x <= width; x += 24) {
+      ctx.lineTo(x, lane.y + Math.sin(x * 0.009 + heroFrame * 0.018 + laneIndex) * 22);
+    }
+    ctx.stroke();
+
+    for (let i = 0; i < 16; i += 1) {
+      const x = ((i * 160 + heroFrame * lane.speed * 2.2) % (width + 240)) - 120;
+      const y = lane.y + Math.sin(x * 0.009 + heroFrame * 0.018 + laneIndex) * 22;
+      ctx.fillStyle = lane.color;
+      ctx.beginPath();
+      ctx.arc(x, y, i % 4 === 0 ? 4.4 : 2.8, 0, Math.PI * 2);
+      ctx.fill();
+    }
+  });
+
+  ctx.fillStyle = "rgba(255,255,255,0.06)";
+  for (let x = 0; x < width; x += 72) {
+    ctx.fillRect(x, 0, 1, height);
+  }
+  for (let y = 0; y < height; y += 72) {
+    ctx.fillRect(0, y, width, 1);
+  }
+
+  heroFrame += 1;
+  requestAnimationFrame(animateHero);
+}
+
+window.addEventListener("resize", render);
 bindControls();
 bindDeck();
-renderScenario();
+render();
+animateHero();

@@ -3,305 +3,333 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>투자 계좌 절세 로드맵</title>
-    <link rel="icon" href='data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64"><rect width="64" height="64" rx="10" fill="%2316806f"/><text x="32" y="42" text-anchor="middle" font-size="32" font-family="Arial" font-weight="700" fill="white">T</text></svg>' />
+    <title>계좌가 수익률을 바꾼다 | Tax Roadmap 2026</title>
+    <link rel="icon" href='data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64"><rect width="64" height="64" rx="16" fill="%230c1024"/><path d="M18 19h28v7H35v22h-7V26H18z" fill="%237ef2c8"/></svg>' />
     <link rel="stylesheet" href="./styles.css" />
   </head>
   <body>
-    <div class="app-shell">
-      <aside class="deck-rail" aria-label="발표 섹션">
-        <a class="brand" href="#opening" aria-label="투자 계좌 절세 로드맵">
-          <span class="brand-mark">T</span>
-          <span>
-            <strong>Tax Roadmap</strong>
-            <small>Investment account planner</small>
-          </span>
-        </a>
-        <nav class="deck-nav">
-          <button class="active" data-target="opening" type="button">큰 그림</button>
-          <button data-target="account-map" type="button">계좌 지도</button>
-          <button data-target="simulator" type="button">실시간 진단</button>
-          <button data-target="takeaway" type="button">발표 요약</button>
-        </nav>
-        <div class="rail-summary">
-          <span>기준</span>
-          <strong>2026.06 보수 기준</strong>
-          <small>세액공제·ISA·해외주식 양도세는 실제 소득과 계좌 유형에 따라 달라집니다.</small>
+    <div class="progress-line" id="progressLine"></div>
+    <header class="top-nav" aria-label="발표 내비게이션">
+      <a class="brand" href="#hero" aria-label="Tax Roadmap 2026">
+        <span>TR</span>
+        <strong>Tax Roadmap 2026</strong>
+      </a>
+      <nav>
+        <a href="#map">계좌 지도</a>
+        <a href="#research">리서치 브리프</a>
+        <a href="#simulator">시뮬레이터</a>
+        <a href="#playbook">실행 순서</a>
+      </nav>
+    </header>
+
+    <main>
+      <section id="hero" class="scene hero-scene" data-scene>
+        <canvas id="heroCanvas" aria-hidden="true"></canvas>
+        <div class="hero-content">
+          <span class="kicker">Presentation web · Korean retail investor tax stack</span>
+          <h1>종목보다 먼저, <em>계좌의 순서</em>를 설계합니다.</h1>
+          <p>
+            수익률 1%를 더 찾기 전에 세금이 빠져나가는 경로부터 막아야 합니다.
+            이 발표는 국내직투, 해외직투, ISA, 연금저축, IRP, DC형 퇴직연금을
+            하나의 로드맵으로 엮어 맞춤형 절세 포트폴리오를 계산합니다.
+          </p>
+          <div class="hero-actions">
+            <a class="primary-link" href="#simulator">내 조건으로 진단</a>
+            <a class="secondary-link" href="#research">근거 먼저 보기</a>
+          </div>
         </div>
-      </aside>
-
-      <main class="deck-stage">
-        <section id="opening" class="slide opening-slide" data-slide>
-          <div class="slide-copy">
-            <span class="eyebrow">Text-first buffer</span>
-            <h1>같은 ETF라도 어느 계좌에 담느냐가 수익률을 바꿉니다.</h1>
-            <p>
-              주식투자의 첫 질문을 종목에서 계좌로 옮겨 봅니다. 국내직투, 해외직투, ISA,
-              연금저축, IRP, DC형 퇴직연금의 역할을 먼저 이해한 뒤, 내 조건에 맞는 계좌
-              조합과 절세 가치를 실시간으로 계산합니다.
-            </p>
+        <aside class="hero-card" aria-label="핵심 메시지">
+          <div class="hero-card-top">
+            <span>Hidden tax drag</span>
+            <strong id="heroTaxDrag">연 0만원</strong>
           </div>
-          <div class="hero-dashboard" aria-label="절세 엔진 개요">
-            <div class="hero-meter">
-              <span>복리 엔진</span>
-              <strong id="heroBenefit">연 0만원</strong>
-              <small>절세액을 재투자할 때 생기는 10년 누적 여력</small>
-            </div>
-            <div class="flow-lanes">
-              <span>일반 계좌</span>
-              <i></i>
-              <span>세금</span>
-              <i></i>
-              <span>남은 수익</span>
-            </div>
-            <div class="flow-lanes optimized">
-              <span>절세계좌</span>
-              <i></i>
-              <span>이연·비과세</span>
-              <i></i>
-              <span>재투자</span>
-            </div>
-            <div class="hero-grid">
-              <div>
-                <span>ISA</span>
-                <strong>손익통산</strong>
-              </div>
-              <div>
-                <span>연금저축·IRP</span>
-                <strong>세액공제</strong>
-              </div>
-              <div>
-                <span>해외직투</span>
-                <strong>250만원 공제</strong>
-              </div>
-              <div>
-                <span>DC형</span>
-                <strong>퇴직금 운용</strong>
-              </div>
-            </div>
-          </div>
-        </section>
-
-        <section id="account-map" class="slide" data-slide>
-          <div class="section-heading">
-            <span class="eyebrow">Six routes</span>
-            <h2>주식투자 6대 경로 한눈에 보기</h2>
-          </div>
-          <div class="account-grid">
-            <article class="account-card">
-              <span>01</span>
-              <h3>국내직투</h3>
-              <p>가장 자유로운 기본 계좌입니다. 출금과 매매가 편하지만 배당·분배금 세금 방어에는 한계가 있습니다.</p>
-              <strong>자유도 높음</strong>
-            </article>
-            <article class="account-card accent-red">
-              <span>02</span>
-              <h3>해외직투</h3>
-              <p>미국 주식과 해외 ETF를 직접 살 수 있습니다. 연간 순이익 250만원 초과분은 양도세 리스크를 봐야 합니다.</p>
-              <strong>22% 구간 관리</strong>
-            </article>
-            <article class="account-card accent-green">
-              <span>03</span>
-              <h3>ISA</h3>
-              <p>이익과 손실을 한 바구니에서 통산합니다. 순이익 일부는 비과세, 초과분은 낮은 분리과세로 처리됩니다.</p>
-              <strong>3년 돈의 기본 그릇</strong>
-            </article>
-            <article class="account-card accent-amber">
-              <span>04</span>
-              <h3>연금저축</h3>
-              <p>노후자금을 만들면서 연말정산 세액공제도 받는 방패입니다. 장기 보유와 연금 수령 규칙이 중요합니다.</p>
-              <strong>세액공제 핵심</strong>
-            </article>
-            <article class="account-card accent-amber">
-              <span>05</span>
-              <h3>IRP</h3>
-              <p>연금저축과 함께 세액공제 한도를 채우는 계좌입니다. 중도 인출 제약이 있어 노후 목적 돈에 어울립니다.</p>
-              <strong>한도 보강</strong>
-            </article>
-            <article class="account-card accent-blue">
-              <span>06</span>
-              <h3>DC형 퇴직연금</h3>
-              <p>회사 퇴직금을 근로자가 직접 운용하는 구조입니다. 성과와 위험이 내 선택에 더 가까이 붙습니다.</p>
-              <strong>퇴직금 포트폴리오</strong>
-            </article>
-          </div>
-          <div class="principle-strip">
+          <div class="tax-flow">
             <div>
-              <strong>손익통산</strong>
-              <span>플러스와 마이너스를 한 계좌 안에서 퉁칩니다.</span>
+              <small>일반 계좌</small>
+              <b id="heroRegular">세후 0만원</b>
             </div>
             <div>
-              <strong>과세이연</strong>
-              <span>지금 낼 세금을 뒤로 미루고 재투자 시간을 벌어줍니다.</span>
-            </div>
-            <div>
-              <strong>비과세·분리과세</strong>
-              <span>일반 금융소득세보다 낮은 구조를 활용합니다.</span>
+              <small>절세 계좌 조합</small>
+              <b id="heroOptimized">세후 0만원</b>
             </div>
           </div>
-        </section>
+          <p>절세액은 사라지는 돈이 아니라, 다시 굴릴 수 있는 투자 원금입니다.</p>
+        </aside>
+      </section>
 
-        <section id="simulator" class="slide simulator-slide" data-slide>
-          <div class="section-heading">
-            <span class="eyebrow">Interactive widget</span>
-            <h2>맞춤형 투자 방향 진단 시뮬레이터</h2>
-          </div>
+      <section id="map" class="scene light-scene" data-scene>
+        <div class="section-head">
+          <span class="kicker">Account universe</span>
+          <h2>6개의 계좌는 서로 다른 시간표로 세금을 처리합니다.</h2>
+          <p>
+            발표의 첫 장은 상품 추천이 아니라 구조 이해입니다. 같은 S&P500 ETF라도
+            어느 계좌에 담겼는지에 따라 세금 발생 시점, 출금 자유도, 복리 속도가 달라집니다.
+          </p>
+        </div>
 
-          <div class="simulator-layout">
-            <form class="control-panel" aria-label="투자 조건 입력">
-              <div class="control-group">
-                <span>투자 경험</span>
-                <div class="segmented" role="group" aria-label="투자 경험">
-                  <button class="active" data-field="experience" data-value="beginner" type="button">초보자</button>
-                  <button data-field="experience" data-value="intermediate" type="button">중급자</button>
-                </div>
-              </div>
+        <div class="account-cards" aria-label="투자 경로 6대 요약">
+          <article class="route-card domestic">
+            <span>01</span>
+            <h3>국내직투</h3>
+            <p>국내 상장주식은 일반 투자자에게 가장 익숙한 기본 경로입니다. 매매와 출금이 자유롭지만 배당·분배금 과세와 금융소득종합과세 구간은 관리해야 합니다.</p>
+            <ul>
+              <li>강점: 유동성, 개별 종목 선택</li>
+              <li>주의: 배당·분배금 15.4% 과세</li>
+              <li>함정: 대주주 요건 해당 시 양도세 검토</li>
+            </ul>
+          </article>
+          <article class="route-card foreign">
+            <span>02</span>
+            <h3>해외직투</h3>
+            <p>미국 주식과 해외 ETF 접근성이 가장 좋습니다. 대신 연간 순이익 250만원을 넘는 실현이익은 22% 세금 노출을 만듭니다.</p>
+            <ul>
+              <li>강점: 글로벌 대표 자산 직접 매수</li>
+              <li>주의: 250만원 기본공제 이후 22%</li>
+              <li>함정: 환율, 손익통산, 신고 타이밍</li>
+            </ul>
+          </article>
+          <article class="route-card isa">
+            <span>03</span>
+            <h3>ISA</h3>
+            <p>3년 이상 쓸 수 있는 돈의 기본 그릇입니다. 계좌 안에서 손익을 합산하고, 순이익 일부 비과세와 초과분 9.9% 분리과세가 핵심입니다.</p>
+            <ul>
+              <li>강점: 손익통산, 낮은 과세</li>
+              <li>주의: 의무 가입기간과 납입 한도</li>
+              <li>함정: 해외 상장 ETF 직접 매수 불가</li>
+            </ul>
+          </article>
+          <article class="route-card pension">
+            <span>04</span>
+            <h3>연금저축</h3>
+            <p>연말정산에서 즉시 체감되는 절세 계좌입니다. 세액공제와 과세이연을 받는 대신 연금 수령 규칙과 중도해지 비용을 받아들여야 합니다.</p>
+            <ul>
+              <li>강점: 세액공제, 장기 복리</li>
+              <li>주의: 세액공제 대상 600만원 축</li>
+              <li>함정: 단기 자금 넣으면 유동성 비용</li>
+            </ul>
+          </article>
+          <article class="route-card irp">
+            <span>05</span>
+            <h3>IRP</h3>
+            <p>연금저축과 합쳐 세액공제 한도를 채우는 보강 계좌입니다. 노후 목적이 분명한 돈에는 강하지만, 인출 제약이 가장 큰 편입니다.</p>
+            <ul>
+              <li>강점: 합산 900만원 한도 보강</li>
+              <li>주의: 위험자산 한도와 수수료</li>
+              <li>함정: 중도해지 시 세제상 불이익</li>
+            </ul>
+          </article>
+          <article class="route-card dc">
+            <span>06</span>
+            <h3>DC형 퇴직연금</h3>
+            <p>회사 퇴직금이 나의 운용 선택에 연결됩니다. 적립금의 성과가 퇴직 자산으로 이어지므로 방치하면 가장 큰 장기 기회비용이 됩니다.</p>
+            <ul>
+              <li>강점: 퇴직금 장기 운용</li>
+              <li>주의: 기본상품 방치 여부 점검</li>
+              <li>함정: 원리금보장만으로 물가 방어 실패</li>
+            </ul>
+          </article>
+        </div>
+      </section>
 
-              <label class="control-group">
-                <span>핵심 목표</span>
-                <select id="goal">
-                  <option value="cash">3년 내 목돈 마련</option>
-                  <option value="tax">연말정산 세액공제 최우선</option>
-                  <option value="retirement">장기 노후 준비</option>
-                </select>
-              </label>
+      <section id="research" class="scene dark-scene" data-scene>
+        <div class="section-head narrow">
+          <span class="kicker">Research brief</span>
+          <h2>발표에 들어갈 핵심 근거를 숫자로 정리합니다.</h2>
+          <p>
+            아래 기준은 발표용 보수 가정입니다. 법령 개정, 소득 구간, ISA 유형, 연금 수령 방식에 따라 실제 결과는 달라질 수 있으므로 시뮬레이터는 “추정치”로 표시합니다.
+          </p>
+        </div>
 
-              <label class="control-group">
-                <span>연령대</span>
+        <div class="brief-grid">
+          <article class="brief-card">
+            <span class="brief-number">250만원</span>
+            <h3>해외주식 기본공제</h3>
+            <p>해외주식 양도차익은 연간 손익을 통산한 뒤 기본공제 250만원을 적용하고, 초과분은 20% 지방소득세 별도 구조로 봅니다.</p>
+            <a href="https://www.nts.go.kr/nts/cm/cntnts/cntntsView.do?cntntsId=8800" target="_blank" rel="noreferrer">국세청 근거</a>
+          </article>
+          <article class="brief-card">
+            <span class="brief-number">200 / 400만원</span>
+            <h3>ISA 순이익 비과세</h3>
+            <p>일반형은 200만원, 서민·농어민형은 400만원까지 순이익 비과세로 설계하고 초과분은 9.9% 분리과세로 계산합니다.</p>
+            <a href="https://www.nabo.go.kr/board/file/down.do?fid=33319223" target="_blank" rel="noreferrer">국회예산정책처 정리</a>
+          </article>
+          <article class="brief-card">
+            <span class="brief-number">600 / 900만원</span>
+            <h3>연금계좌 세액공제 축</h3>
+            <p>연금저축은 600만원, 연금저축과 IRP 합산은 900만원을 세액공제 계산의 핵심 한도로 두고, 소득 구간별 공제율을 적용합니다.</p>
+            <a href="https://www.nts.go.kr/nts/cm/cntnts/cntntsView.do?cntntsId=7875" target="_blank" rel="noreferrer">국세청 근거</a>
+          </article>
+          <article class="brief-card">
+            <span class="brief-number">2,000만원</span>
+            <h3>금융소득종합과세 경계</h3>
+            <p>이자·배당 금융소득이 커지는 투자자는 일반 계좌 분배금의 종합과세 가능성까지 함께 검토해야 합니다.</p>
+            <a href="https://www.nts.go.kr/" target="_blank" rel="noreferrer">국세청</a>
+          </article>
+          <article class="brief-card">
+            <span class="brief-number">55세</span>
+            <h3>연금 수령의 문</h3>
+            <p>연금저축과 IRP는 단기 절세만 보고 접근하면 안 됩니다. 연금 수령 조건, 중도해지 과세, 수령 기간을 함께 설계해야 합니다.</p>
+            <a href="https://www.nts.go.kr/nts/cm/cntnts/cntntsView.do?cntntsId=7875" target="_blank" rel="noreferrer">국세청 근거</a>
+          </article>
+          <article class="brief-card">
+            <span class="brief-number">DC</span>
+            <h3>퇴직금도 포트폴리오다</h3>
+            <p>DC형 퇴직연금은 근로자가 적립금을 운용하는 구조입니다. 퇴직금이 예금처럼 방치되는지, 장기 자산배분으로 운용되는지 확인해야 합니다.</p>
+            <a href="https://www.moel.go.kr/retirementpay.do" target="_blank" rel="noreferrer">고용노동부 근거</a>
+          </article>
+        </div>
+      </section>
+
+      <section id="simulator" class="scene simulator-scene" data-scene>
+        <div class="section-head">
+          <span class="kicker">Interactive diagnosis</span>
+          <h2>조건을 바꾸면 계좌 순서와 절세 효과가 즉시 바뀝니다.</h2>
+          <p>입력값은 발표 현장에서 바로 조작할 수 있도록 크게 만들었습니다. 추천 비중은 교육용 모델이며, 실제 투자 실행 전에는 개인 세무 상황을 확인해야 합니다.</p>
+        </div>
+
+        <div class="simulator-shell">
+          <form class="control-deck" aria-label="맞춤형 투자 조건">
+            <div class="persona-switch" role="group" aria-label="투자자 유형">
+              <button class="active" data-field="persona" data-value="starter" type="button">
+                <span>Starter</span>
+                <strong>초보 · 시드머니</strong>
+              </button>
+              <button data-field="persona" data-value="taxShield" type="button">
+                <span>Tax shield</span>
+                <strong>근로자 · 연말정산</strong>
+              </button>
+              <button data-field="persona" data-value="global" type="button">
+                <span>Global</span>
+                <strong>미국 직투 선호</strong>
+              </button>
+              <button data-field="persona" data-value="retirement" type="button">
+                <span>Retirement</span>
+                <strong>장기 노후 준비</strong>
+              </button>
+            </div>
+
+            <div class="input-grid">
+              <label>
+                <span>연령</span>
                 <input id="age" type="range" min="25" max="65" step="5" value="35" />
-                <strong><output id="ageLabel">35세</output></strong>
+                <output id="ageLabel">35세</output>
               </label>
-
-              <label class="control-group">
+              <label>
                 <span>연간 투자 가능 금액</span>
-                <input id="annualAmount" type="range" min="100" max="5000" step="100" value="1200" />
-                <strong><output id="amountLabel">1,200만원</output></strong>
+                <input id="annualAmount" type="range" min="300" max="8000" step="100" value="1800" />
+                <output id="amountLabel">1,800만원</output>
               </label>
-
-              <label class="control-group">
-                <span>목표 금액</span>
-                <input id="targetAmount" type="range" min="1000" max="30000" step="500" value="10000" />
-                <strong><output id="targetLabel">1억원</output></strong>
+              <label>
+                <span>연 실현 해외주식 이익</span>
+                <input id="foreignGain" type="range" min="0" max="5000" step="100" value="600" />
+                <output id="foreignGainLabel">600만원</output>
               </label>
-
-              <label class="control-group">
-                <span>소득 구간</span>
+              <label>
+                <span>일반 계좌 배당·분배금</span>
+                <input id="dividendIncome" type="range" min="0" max="3000" step="100" value="300" />
+                <output id="dividendLabel">300만원</output>
+              </label>
+              <label>
+                <span>총급여 구간</span>
                 <select id="incomeBand">
-                  <option value="standard">총급여 5,500만원 초과</option>
-                  <option value="low">총급여 5,500만원 이하</option>
+                  <option value="standard">5,500만원 초과</option>
+                  <option value="low">5,500만원 이하</option>
                 </select>
               </label>
-
-              <div class="control-group">
-                <span>미국 주식 직접투자 선호</span>
-                <div class="segmented three" role="group" aria-label="미국 주식 직접투자 선호">
-                  <button data-field="overseas" data-value="low" type="button">낮음</button>
-                  <button class="active" data-field="overseas" data-value="medium" type="button">보통</button>
-                  <button data-field="overseas" data-value="high" type="button">높음</button>
-                </div>
-              </div>
-
-              <label class="control-group">
-                <span>가정 수익률</span>
-                <input id="returnRate" type="range" min="2" max="10" step="0.5" value="5" />
-                <strong><output id="returnLabel">연 5.0%</output></strong>
+              <label>
+                <span>투자 기간</span>
+                <input id="horizon" type="range" min="3" max="20" step="1" value="10" />
+                <output id="horizonLabel">10년</output>
               </label>
-            </form>
+            </div>
+          </form>
 
-            <section class="result-panel" aria-label="진단 결과">
-              <div class="metric-row">
-                <div class="metric-card positive">
-                  <span>연 절세 가치</span>
-                  <strong id="taxSavingMetric">0만원</strong>
-                  <small>세액공제 + ISA 과세 차이 추정</small>
-                </div>
-                <div class="metric-card">
-                  <span>10년 재투자 가치</span>
-                  <strong id="compoundMetric">0만원</strong>
-                  <small>절세액을 매년 재투자한다고 가정</small>
-                </div>
-                <div class="metric-card negative">
-                  <span>해외직투 세금 노출</span>
-                  <strong id="foreignTaxMetric">0만원</strong>
-                  <small>연 실현이익 기준 단순 추정</small>
+          <section class="result-stage" aria-label="시뮬레이션 결과">
+            <div class="metric-strip">
+              <div>
+                <span>연간 절세/방어 가치</span>
+                <strong id="savingMetric">0만원</strong>
+                <small>세액공제 + ISA 과세차 + 해외직투 관리</small>
+              </div>
+              <div>
+                <span>기간 누적 재투자 여력</span>
+                <strong id="compoundMetric">0만원</strong>
+                <small id="compoundCaption">10년 복리 가정</small>
+              </div>
+              <div>
+                <span>세금 방어 점수</span>
+                <strong id="scoreMetric">0</strong>
+                <small id="scoreCaption">균형 조합</small>
+              </div>
+            </div>
+
+            <div class="chart-row">
+              <div class="allocation-visual">
+                <div id="donut" class="donut" aria-label="추천 계좌 배분"></div>
+                <div class="donut-center">
+                  <span>추천</span>
+                  <strong id="leadAccount">ISA</strong>
                 </div>
               </div>
+              <div class="bars-panel" id="allocationBars"></div>
+            </div>
 
-              <div class="visual-grid">
-                <div class="donut-panel">
-                  <div id="allocationDonut" class="allocation-donut" aria-label="추천 계좌 조합 비율"></div>
-                  <div class="score-lockup">
-                    <span>세금 방어 점수</span>
-                    <strong id="defenseScore">0</strong>
-                    <small id="scoreLabel">계산 중</small>
-                  </div>
-                </div>
-                <div id="allocationBars" class="allocation-bars"></div>
+            <div class="timeline-panel">
+              <div>
+                <span>세후 자산 시뮬레이션</span>
+                <strong id="gapMetric">차이 0만원</strong>
               </div>
-
-              <div class="comparison-panel">
-                <div>
-                  <span>일반 계좌 대비</span>
-                  <strong id="savingBarLabel">0만원</strong>
-                  <small>연간 예상 절세 및 과세이연 가치</small>
-                </div>
-                <div class="comparison-bars">
-                  <span class="bar taxable"><i id="taxableBar"></i></span>
-                  <span class="bar optimized"><i id="optimizedBar"></i></span>
-                </div>
-              </div>
-
-              <div class="advice-panel">
-                <span>한 줄 저격 투자 조언</span>
-                <strong id="oneLineAdvice">계산 중입니다.</strong>
-                <ol id="actionItems"></ol>
-              </div>
-            </section>
-          </div>
-        </section>
-
-        <section id="takeaway" class="slide takeaway-slide" data-slide>
-          <div class="takeaway-copy">
-            <span class="eyebrow">Closing message</span>
-            <h2>결론은 단순합니다. 세금으로 빠질 돈을 내 자산 안에 더 오래 묶어두는 것입니다.</h2>
-            <p>
-              초보자는 ISA로 3년 돈의 그릇을 만들고, 연말정산이 중요한 근로자는 연금저축과 IRP
-              한도를 먼저 봅니다. 미국 직투는 매력적이지만 실현이익 250만원 이후의 세금 구간을
-              계획해야 합니다.
-            </p>
-          </div>
-          <div class="takeaway-board">
-            <div>
-              <span>첫 번째</span>
-              <strong>ISA로 손익통산의 바구니를 만든다.</strong>
+              <canvas id="wealthChart" width="960" height="280" aria-label="일반 계좌와 최적 조합 비교 차트"></canvas>
             </div>
-            <div>
-              <span>두 번째</span>
-              <strong>연금저축·IRP로 세액공제 방패를 세운다.</strong>
-            </div>
-            <div>
-              <span>세 번째</span>
-              <strong>해외직투는 실현이익과 환율을 같이 관리한다.</strong>
-            </div>
-          </div>
-          <div class="source-panel">
-            <strong>자료 기준</strong>
-            <p>발표용 교육 자료이며 투자·세무 자문이 아닙니다. 실제 세액은 소득, 계좌 유형, 납입 한도, 연금 수령 방식, 금융소득종합과세 여부에 따라 달라질 수 있습니다.</p>
-            <div class="source-links">
-              <a href="https://www.fsc.go.kr/po020201/27339" target="_blank" rel="noreferrer">금융위원회 ISA</a>
-              <a href="https://www.nts.go.kr/nts/cm/cntnts/cntntsView.do?cntntsId=8800" target="_blank" rel="noreferrer">국세청 해외주식 양도소득</a>
-              <a href="https://www.nts.go.kr/nts/cm/cntnts/cntntsView.do?cntntsId=7875" target="_blank" rel="noreferrer">국세청 연금계좌</a>
-              <a href="https://www.moel.go.kr/retirementpay.do" target="_blank" rel="noreferrer">고용노동부 퇴직연금</a>
-            </div>
-          </div>
-        </section>
-      </main>
 
-      <div class="deck-controls" aria-label="발표 이동">
-        <button id="prevSlide" type="button" aria-label="이전 섹션">‹</button>
-        <span id="slideCounter">1 / 4</span>
-        <button id="nextSlide" type="button" aria-label="다음 섹션">›</button>
-      </div>
+            <div class="advice-card">
+              <span>Speaker note</span>
+              <h3 id="oneLineAdvice">계산 중</h3>
+              <ol id="actionItems"></ol>
+            </div>
+          </section>
+        </div>
+      </section>
+
+      <section id="playbook" class="scene playbook-scene" data-scene>
+        <div class="section-head narrow">
+          <span class="kicker">Action playbook</span>
+          <h2>발표의 결론: 돈의 사용 시점별로 계좌를 쌓습니다.</h2>
+          <p>투자 성향보다 먼저 물어야 할 질문은 “언제 쓸 돈인가?”입니다. 계좌는 수익률 경쟁이 아니라 시간표 배치입니다.</p>
+        </div>
+        <div class="playbook-steps">
+          <article>
+            <span>1</span>
+            <h3>3년 안에 쓸 돈</h3>
+            <p>ISA를 중심에 놓고 목돈·ETF·분배금 흐름을 관리합니다. 단기 지출 가능성이 높은 돈은 IRP에 묶지 않습니다.</p>
+          </article>
+          <article>
+            <span>2</span>
+            <h3>연말정산으로 돌려받을 돈</h3>
+            <p>연금저축 600만원 축과 IRP 보강 한도를 확인합니다. 환급액은 소비하지 말고 다음 납입 원금으로 재투입합니다.</p>
+          </article>
+          <article>
+            <span>3</span>
+            <h3>글로벌 성장에 걸 돈</h3>
+            <p>미국 직투는 실현이익 250만원 초과 구간을 모니터링하고, 국내 상장 해외 ETF와 세후 수익률을 비교합니다.</p>
+          </article>
+          <article>
+            <span>4</span>
+            <h3>은퇴 이후까지 둘 돈</h3>
+            <p>연금저축·IRP·DC형을 하나의 노후 포트폴리오로 봅니다. 방치된 퇴직연금은 가장 조용한 기회비용입니다.</p>
+          </article>
+        </div>
+        <div class="closing-statement">
+          <p>핵심은 세금으로 나갈 돈을 내 자산 안에 더 오래 붙잡아 두는 것입니다.</p>
+          <strong>세금 방어는 절약이 아니라, 복리 엔진의 연료입니다.</strong>
+        </div>
+      </section>
+    </main>
+
+    <div class="deck-controls" aria-label="발표 이동">
+      <button id="prevScene" type="button" aria-label="이전 장면">‹</button>
+      <span id="sceneCounter">1 / 5</span>
+      <button id="nextScene" type="button" aria-label="다음 장면">›</button>
     </div>
 
     <script src="./app.js"></script>
