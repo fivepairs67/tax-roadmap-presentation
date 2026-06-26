@@ -9,6 +9,17 @@
 - `styles.css`: 반응형 발표 레이아웃, 계좌 카드, 차트 스타일
 - `app.js`: 슬라이드 이동, 입력 상태, 계좌 조합 및 절세 가치 계산
 
+## 배포
+
+- GitHub: https://github.com/fivepairs67/tax-roadmap-presentation
+- Cloudflare Pages: https://tax-roadmap-presentation.pages.dev/
+
+재배포 명령:
+
+```bash
+npx wrangler pages deploy . --project-name tax-roadmap-presentation --branch main
+```
+
 ## 계산 기준
 
 - 연금저축 세액공제 대상은 최대 600만원, 연금저축+IRP 합산 최대 900만원으로 단순화했습니다.
