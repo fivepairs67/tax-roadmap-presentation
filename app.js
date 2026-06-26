@@ -564,6 +564,26 @@ function bindDeck() {
   }, { passive: true });
 }
 
+function setSp500Mode(mode) {
+  qsa("[data-sp500-mode]").forEach((button) => {
+    const isActive = button.dataset.sp500Mode === mode;
+    button.classList.toggle("active", isActive);
+    button.setAttribute("aria-pressed", String(isActive));
+  });
+  qsa("[data-case-kind]").forEach((row) => {
+    row.classList.toggle("is-active", row.dataset.caseKind === mode);
+  });
+}
+
+function bindSp500Case() {
+  const buttons = qsa("[data-sp500-mode]");
+  if (!buttons.length) return;
+  buttons.forEach((button) => {
+    button.addEventListener("click", () => setSp500Mode(button.dataset.sp500Mode));
+  });
+  setSp500Mode(buttons.find((button) => button.classList.contains("active"))?.dataset.sp500Mode ?? "gain");
+}
+
 function animateHero() {
   const canvas = qs("#heroCanvas");
   const ctx = canvas.getContext("2d");
@@ -619,5 +639,6 @@ function animateHero() {
 window.addEventListener("resize", render);
 bindControls();
 bindDeck();
+bindSp500Case();
 render();
 animateHero();
