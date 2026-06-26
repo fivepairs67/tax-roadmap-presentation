@@ -4,7 +4,7 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>계좌가 수익률을 바꾼다 | Tax Roadmap 2026</title>
-    <link rel="icon" href='data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64"><rect width="64" height="64" rx="16" fill="%230c1024"/><path d="M18 19h28v7H35v22h-7V26H18z" fill="%237ef2c8"/></svg>' />
+    <link rel="icon" href='data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64"><rect width="64" height="64" rx="10" fill="%23171a1f"/><path d="M18 19h28v7H35v22h-7V26H18z" fill="%23ffffff"/></svg>' />
     <link rel="stylesheet" href="./styles.css" />
   </head>
   <body>
@@ -69,7 +69,7 @@
         </div>
 
         <div class="account-cards" aria-label="투자 경로 6대 요약">
-          <article class="route-card domestic">
+          <article class="route-card domestic" data-account="domestic" tabindex="0">
             <span>01</span>
             <h3>국내직투</h3>
             <p>국내 상장주식은 일반 투자자에게 가장 익숙한 기본 경로입니다. 매매와 출금이 자유롭지만 배당·분배금 과세와 금융소득종합과세 구간은 관리해야 합니다.</p>
@@ -79,7 +79,7 @@
               <li>함정: 대주주 요건 해당 시 양도세 검토</li>
             </ul>
           </article>
-          <article class="route-card foreign">
+          <article class="route-card foreign" data-account="foreign" tabindex="0">
             <span>02</span>
             <h3>해외직투</h3>
             <p>미국 주식과 해외 ETF 접근성이 가장 좋습니다. 대신 연간 순이익 250만원을 넘는 실현이익은 22% 세금 노출을 만듭니다.</p>
@@ -89,7 +89,7 @@
               <li>함정: 환율, 손익통산, 신고 타이밍</li>
             </ul>
           </article>
-          <article class="route-card isa">
+          <article class="route-card isa" data-account="isa" tabindex="0">
             <span>03</span>
             <h3>ISA</h3>
             <p>3년 이상 쓸 수 있는 돈의 기본 그릇입니다. 계좌 안에서 손익을 합산하고, 순이익 일부 비과세와 초과분 9.9% 분리과세가 핵심입니다.</p>
@@ -99,7 +99,7 @@
               <li>함정: 해외 상장 ETF 직접 매수 불가</li>
             </ul>
           </article>
-          <article class="route-card pension">
+          <article class="route-card pension" data-account="pension" tabindex="0">
             <span>04</span>
             <h3>연금저축</h3>
             <p>연말정산에서 즉시 체감되는 절세 계좌입니다. 세액공제와 과세이연을 받는 대신 연금 수령 규칙과 중도해지 비용을 받아들여야 합니다.</p>
@@ -109,7 +109,7 @@
               <li>함정: 단기 자금 넣으면 유동성 비용</li>
             </ul>
           </article>
-          <article class="route-card irp">
+          <article class="route-card irp" data-account="irp" tabindex="0">
             <span>05</span>
             <h3>IRP</h3>
             <p>연금저축과 합쳐 세액공제 한도를 채우는 보강 계좌입니다. 노후 목적이 분명한 돈에는 강하지만, 인출 제약이 가장 큰 편입니다.</p>
@@ -119,7 +119,7 @@
               <li>함정: 중도해지 시 세제상 불이익</li>
             </ul>
           </article>
-          <article class="route-card dc">
+          <article class="route-card dc" data-account="dc" tabindex="0">
             <span>06</span>
             <h3>DC형 퇴직연금</h3>
             <p>회사 퇴직금이 나의 운용 선택에 연결됩니다. 적립금의 성과가 퇴직 자산으로 이어지므로 방치하면 가장 큰 장기 기회비용이 됩니다.</p>
@@ -149,7 +149,7 @@
           </div>
 
           <div class="sp500-case-grid">
-            <article>
+            <article data-account="domestic">
               <span>국내직투 · 일반 위탁</span>
               <strong>KODEX/TIGER/SOL 미국S&P500</strong>
               <dl>
@@ -158,7 +158,7 @@
                 <div data-case-kind="constraint"><dt>포인트</dt><dd>출금은 자유롭지만 금융소득 2,000만원 경계와 분배금 규모를 함께 확인</dd></div>
               </dl>
             </article>
-            <article>
+            <article data-account="foreign">
               <span>해외직투</span>
               <strong>SPY / VOO / IVV</strong>
               <dl>
@@ -167,7 +167,7 @@
                 <div data-case-kind="constraint"><dt>포인트</dt><dd>상품 선택 폭은 넓지만 환율, 신고, 손익통산, 매도 연도 분산이 중요</dd></div>
               </dl>
             </article>
-            <article>
+            <article data-account="isa">
               <span>ISA</span>
               <strong>국내상장 S&P500 ETF</strong>
               <dl>
@@ -176,7 +176,7 @@
                 <div data-case-kind="constraint"><dt>포인트</dt><dd>SPY 직접 매수는 어렵고 국내상장 ETF로 대체, 3년 이상 둘 돈에 적합</dd></div>
               </dl>
             </article>
-            <article>
+            <article data-account="pension">
               <span>연금저축</span>
               <strong>국내상장 S&P500 ETF·펀드</strong>
               <dl>
@@ -185,7 +185,7 @@
                 <div data-case-kind="constraint"><dt>포인트</dt><dd>세액공제는 강하지만 중도해지 시 기타소득세 등 비용을 먼저 확인</dd></div>
               </dl>
             </article>
-            <article>
+            <article data-account="irp">
               <span>IRP</span>
               <strong>퇴직연금 가능 S&P500 ETF</strong>
               <dl>
@@ -194,7 +194,7 @@
                 <div data-case-kind="constraint"><dt>포인트</dt><dd>위험자산 한도와 중도 인출 제약 때문에 노후 목적 자금에 적합</dd></div>
               </dl>
             </article>
-            <article>
+            <article data-account="dc">
               <span>DC형 퇴직연금</span>
               <strong>회사 퇴직연금 라인업 내 상품</strong>
               <dl>

@@ -1,10 +1,10 @@
 const accounts = [
-  { key: "isa", label: "ISA", color: "#39d795" },
-  { key: "pension", label: "연금저축", color: "#ffc267" },
-  { key: "irp", label: "IRP", color: "#f59e59" },
-  { key: "dc", label: "DC형", color: "#7095ff" },
-  { key: "domestic", label: "국내직투", color: "#8792a8" },
-  { key: "foreign", label: "해외직투", color: "#ff7b78" },
+  { key: "isa", label: "ISA", color: "#4d7c65" },
+  { key: "pension", label: "연금저축", color: "#b9823f" },
+  { key: "irp", label: "IRP", color: "#9f6f4f" },
+  { key: "dc", label: "DC형", color: "#315f8c" },
+  { key: "domestic", label: "국내직투", color: "#7a8594" },
+  { key: "foreign", label: "해외직투", color: "#b96958" },
 ];
 
 const personaDefaults = {
@@ -533,6 +533,9 @@ function goToScene(index) {
 
 function updateSceneUI() {
   qs("#sceneCounter").textContent = `${activeScene + 1} / ${sceneIds.length}`;
+  qsa(".top-nav nav a").forEach((link) => {
+    link.classList.toggle("is-active", link.getAttribute("href") === `#${sceneIds[activeScene]}`);
+  });
 }
 
 function bindDeck() {
@@ -547,6 +550,9 @@ function bindDeck() {
 
   const observer = new IntersectionObserver(
     (entries) => {
+      entries.forEach((entry) => {
+        entry.target.classList.toggle("is-visible", entry.isIntersecting);
+      });
       const visible = entries
         .filter((entry) => entry.isIntersecting)
         .sort((a, b) => b.intersectionRatio - a.intersectionRatio)[0];
@@ -557,11 +563,38 @@ function bindDeck() {
     { threshold: [0.45, 0.72] },
   );
   qsa("[data-scene]").forEach((scene) => observer.observe(scene));
+  qs(`#${sceneIds[activeScene]}`).classList.add("is-visible");
+  updateSceneUI();
 
   window.addEventListener("scroll", () => {
     const maxScroll = document.documentElement.scrollHeight - window.innerHeight;
     qs("#progressLine").style.width = `${maxScroll > 0 ? (window.scrollY / maxScroll) * 100 : 0}%`;
   }, { passive: true });
+}
+
+function setActiveAccount(accountKey) {
+  qsa("[data-account]").forEach((element) => {
+    const isActive = element.dataset.account === accountKey;
+    element.classList.toggle("is-selected", isActive);
+    if (element.classList.contains("route-card")) {
+      element.setAttribute("aria-pressed", String(isActive));
+    }
+  });
+}
+
+function bindAccountMap() {
+  const cards = qsa(".route-card[data-account]");
+  if (!cards.length) return;
+  cards.forEach((card) => {
+    card.setAttribute("role", "button");
+    card.addEventListener("click", () => setActiveAccount(card.dataset.account));
+    card.addEventListener("keydown", (event) => {
+      if (event.key !== "Enter" && event.key !== " ") return;
+      event.preventDefault();
+      setActiveAccount(card.dataset.account);
+    });
+  });
+  setActiveAccount("isa");
 }
 
 function setSp500Mode(mode) {
@@ -595,17 +628,17 @@ function animateHero() {
   const width = rect.width;
   const height = rect.height;
   ctx.clearRect(0, 0, width, height);
-  ctx.fillStyle = "#080b16";
+  ctx.fillStyle = "#f8fafc";
   ctx.fillRect(0, 0, width, height);
 
   const lanes = [
-    { y: height * 0.28, color: "rgba(126,242,200,0.85)", speed: 0.8 },
-    { y: height * 0.46, color: "rgba(99,216,255,0.72)", speed: 0.55 },
-    { y: height * 0.64, color: "rgba(255,123,120,0.68)", speed: 0.38 },
+    { y: height * 0.28, color: "rgba(77,124,101,0.38)", speed: 0.8 },
+    { y: height * 0.46, color: "rgba(49,95,140,0.42)", speed: 0.55 },
+    { y: height * 0.64, color: "rgba(185,130,63,0.36)", speed: 0.38 },
   ];
 
   lanes.forEach((lane, laneIndex) => {
-    ctx.strokeStyle = "rgba(255,255,255,0.08)";
+    ctx.strokeStyle = "rgba(49,95,140,0.12)";
     ctx.lineWidth = 1;
     ctx.beginPath();
     ctx.moveTo(0, lane.y);
@@ -624,7 +657,7 @@ function animateHero() {
     }
   });
 
-  ctx.fillStyle = "rgba(255,255,255,0.06)";
+  ctx.fillStyle = "rgba(49,95,140,0.055)";
   for (let x = 0; x < width; x += 72) {
     ctx.fillRect(x, 0, 1, height);
   }
@@ -639,6 +672,7 @@ function animateHero() {
 window.addEventListener("resize", render);
 bindControls();
 bindDeck();
+bindAccountMap();
 bindSp500Case();
 render();
 animateHero();
