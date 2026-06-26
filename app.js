@@ -8,10 +8,10 @@ const accounts = [
 ];
 
 const personaDefaults = {
-  starter: { age: 35, annualAmount: 1800, foreignGain: 600, dividendIncome: 300, incomeBand: "standard", horizon: 10, expectedReturn: 5.5 },
-  taxShield: { age: 42, annualAmount: 2400, foreignGain: 300, dividendIncome: 400, incomeBand: "low", horizon: 12, expectedReturn: 5.5 },
-  global: { age: 38, annualAmount: 3200, foreignGain: 2200, dividendIncome: 500, incomeBand: "standard", horizon: 10, expectedReturn: 6.5 },
-  retirement: { age: 50, annualAmount: 2800, foreignGain: 400, dividendIncome: 600, incomeBand: "standard", horizon: 18, expectedReturn: 5 },
+  starter: { age: 35, annualAmount: 1800, foreignGain: 600, dividendIncome: 300, totalSalary: 6000, horizon: 10, expectedReturn: 5.5 },
+  taxShield: { age: 42, annualAmount: 2400, foreignGain: 300, dividendIncome: 400, totalSalary: 5000, horizon: 12, expectedReturn: 5.5 },
+  global: { age: 38, annualAmount: 3200, foreignGain: 2200, dividendIncome: 500, totalSalary: 8500, horizon: 10, expectedReturn: 6.5 },
+  retirement: { age: 50, annualAmount: 2800, foreignGain: 400, dividendIncome: 600, totalSalary: 9000, horizon: 18, expectedReturn: 5 },
 };
 
 const LIMITS = {
@@ -49,9 +49,9 @@ function normalizeAllocation(raw) {
   return normalized;
 }
 
-function normalizeAmountsToAnnual(amounts, annual) {
+function normalizeUserAmountsToAnnual(amounts, annual) {
   const next = { ...amounts };
-  const nonDomesticKeys = accounts.map(({ key }) => key).filter((key) => key !== "domestic");
+  const nonDomesticKeys = accounts.map(({ key }) => key).filter((key) => !["domestic", "dc"].includes(key));
   const nonDomesticTotal = nonDomesticKeys.reduce((sum, key) => sum + Math.max(0, next[key] ?? 0), 0);
   if (nonDomesticTotal > annual) {
     const scale = annual / nonDomesticTotal;
@@ -62,29 +62,76 @@ function normalizeAmountsToAnnual(amounts, annual) {
   } else {
     next.domestic = Math.max(0, annual - nonDomesticTotal);
   }
-  return Object.fromEntries(accounts.map(({ key }) => [key, Math.max(0, next[key] ?? 0)]));
+  return Object.fromEntries(accounts.filter(({ key }) => key !== "dc").map(({ key }) => [key, Math.max(0, next[key] ?? 0)]));
+}
+
+function salaryProfile() {
+  const salary = state.totalSalary;
+  if (salary <= 5000) {
+    return {
+      label: "ISA 서민형 · 연금 16.5%",
+      isaType: "서민형",
+      isaExemption: 400,
+      pensionCreditRate: 0.165,
+    };
+  }
+  if (salary <= 5500) {
+    return {
+      label: "ISA 일반형 · 연금 16.5%",
+      isaType: "일반형",
+      isaExemption: 200,
+      pensionCreditRate: 0.165,
+    };
+  }
+  if (salary <= 7000) {
+    return {
+      label: "ISA 일반형 · 연금 13.2%",
+      isaType: "일반형",
+      isaExemption: 200,
+      pensionCreditRate: 0.132,
+    };
+  }
+  if (salary <= 12000) {
+    return {
+      label: "고소득 일반형 · 연금 13.2%",
+      isaType: "일반형",
+      isaExemption: 200,
+      pensionCreditRate: 0.132,
+    };
+  }
+  return {
+    label: "초고소득 일반형 · 연금 13.2%",
+    isaType: "일반형",
+    isaExemption: 200,
+    pensionCreditRate: 0.132,
+  };
+}
+
+function estimateDcContribution() {
+  return state.totalSalary / 12;
 }
 
 function buildPlan() {
   const annual = Math.max(0, state.annualAmount);
-  const isLowIncome = state.incomeBand === "low";
+  const profile = salaryProfile();
   const isShort = state.horizon <= 5;
   const isLong = state.horizon >= 15;
+  const dcContribution = estimateDcContribution();
   const foreignPressure = state.foreignGain > 250 ? Math.min(1, (state.foreignGain - 250) / 2750) : 0;
   const dividendPressure = state.dividendIncome >= 1000 ? Math.min(1, state.dividendIncome / 2500) : 0;
 
   if (annual <= 900) {
-    const smallAmounts = normalizeAmountsToAnnual(
+    const smallAmounts = normalizeUserAmountsToAnnual(
       {
         isa: annual * (isShort ? 0.7 : 0.62),
         pension: annual * (isLong ? 0.14 : 0.08),
         irp: 0,
-        dc: annual * (state.persona === "retirement" ? 0.06 : 0.02),
         foreign: annual * (state.persona === "global" ? 0.1 : 0.04),
       },
       annual,
     );
-    return { amountByAccount: smallAmounts, allocation: normalizeAllocation(smallAmounts) };
+    const amountByAccount = { ...smallAmounts, dc: dcContribution };
+    return { amountByAccount, allocation: normalizeAllocation(amountByAccount), dcContribution, salaryProfile: profile };
   }
 
   const isaBase =
@@ -100,10 +147,6 @@ function buildPlan() {
     state.persona === "taxShield" ? 0.13 :
     state.persona === "retirement" ? 0.11 :
     0.035;
-  const dcBase =
-    state.persona === "retirement" ? 0.13 :
-    isLong || state.age >= 50 ? 0.08 :
-    0.035;
   const foreignBase =
     state.persona === "global" ? 0.24 :
     state.persona === "starter" ? 0.06 :
@@ -115,43 +158,42 @@ function buildPlan() {
   );
   const pensionTarget = Math.min(
     LIMITS.pensionCredit,
-    annual * (pensionBase + (isLowIncome ? 0.04 : 0) + (isLong ? 0.05 : 0) + (state.age >= 50 ? 0.03 : 0)),
+    annual * (pensionBase + (profile.pensionCreditRate === 0.165 ? 0.04 : 0) + (isLong ? 0.05 : 0) + (state.age >= 50 ? 0.03 : 0)),
   );
   const irpLimit = Math.max(0, LIMITS.pensionTotalCredit - pensionTarget);
   const irpTarget = Math.min(
     irpLimit,
     annual * (irpBase + (isLong ? 0.03 : 0) + (state.age >= 50 ? 0.02 : 0)),
   );
-  const dcTarget = annual * dcBase;
   const foreignTarget = annual * Math.max(
     0.03,
     foreignBase - foreignPressure * 0.08 - (state.age >= 50 ? 0.03 : 0),
   );
-  const amounts = normalizeAmountsToAnnual(
+  const userAmounts = normalizeUserAmountsToAnnual(
     {
       isa: isaTarget,
       pension: pensionTarget,
       irp: irpTarget,
-      dc: dcTarget,
       foreign: foreignTarget,
     },
     annual,
   );
+  const amounts = { ...userAmounts, dc: dcContribution };
 
-  return { amountByAccount: amounts, allocation: normalizeAllocation(amounts) };
+  return { amountByAccount: amounts, allocation: normalizeAllocation(amounts), dcContribution, salaryProfile: profile };
 }
 
 function calculate() {
-  const { allocation, amountByAccount } = buildPlan();
+  const { allocation, amountByAccount, dcContribution, salaryProfile: profile } = buildPlan();
   const annual = state.annualAmount;
   const expectedReturn = state.expectedReturn / 100;
   const pensionEligible = Math.min(amountByAccount.pension, 600);
   const irpEligible = Math.min(amountByAccount.irp, Math.max(0, 900 - pensionEligible));
-  const creditRate = state.incomeBand === "low" ? 0.165 : 0.132;
+  const creditRate = profile.pensionCreditRate;
   const pensionCredit = (pensionEligible + irpEligible) * creditRate;
 
   const isaGain = amountByAccount.isa * expectedReturn * 3;
-  const isaExemption = state.incomeBand === "low" ? 400 : 200;
+  const isaExemption = profile.isaExemption;
   const regularIsaTax = isaGain * 0.154;
   const isaTax = Math.max(0, isaGain - isaExemption) * 0.099;
   const isaSaving = Math.max(0, regularIsaTax - isaTax) / 3;
@@ -165,8 +207,9 @@ function calculate() {
   const rate = expectedReturn;
   const factor = futureValueFactor(rate, state.horizon);
   const compound = annualDefense * factor;
-  const regularWealth = annual * factor;
-  const optimizedWealth = (annual + annualDefense) * factor;
+  const annualContribution = annual + dcContribution;
+  const regularWealth = annualContribution * factor;
+  const optimizedWealth = (annualContribution + annualDefense) * factor;
   const gap = optimizedWealth - regularWealth;
   const score = clamp(
     Math.round(
@@ -184,6 +227,9 @@ function calculate() {
   return {
     allocation,
     amountByAccount,
+    annualContribution,
+    dcContribution,
+    salaryProfile: profile,
     pensionCredit,
     isaSaving,
     foreignTax,
@@ -210,6 +256,18 @@ function adviceFor(result) {
   const foreignTaxExposure = result.foreignTax;
   const dividendTax = state.dividendIncome * 0.154;
   const lead = leadAccount(allocation);
+  const dcShareOfPool = (result.dcContribution / Math.max(result.annualContribution, 1)) * 100;
+
+  if (result.dcContribution >= 700 && dcShareOfPool >= 18 && (state.horizon >= 10 || state.age >= 45)) {
+    return {
+      title: "총급여 기준 DC 회사부담금이 커졌습니다. 퇴직연금 적립금을 별도 계좌가 아니라 핵심 장기 자산으로 봐야 합니다.",
+      items: [
+        `연 총급여 ${formatManwon(state.totalSalary)} 기준 DC 회사부담금 추정액은 연 ${formatManwon(result.dcContribution)}입니다.`,
+        `향후 1년 투자/운용 풀에서 DC형이 차지하는 비중은 약 ${Math.round(dcShareOfPool)}%입니다.`,
+        "원리금보장 상품에 오래 방치되어 있다면 연금저축·IRP와 합산해 위험자산 비중을 다시 맞춥니다.",
+      ],
+    };
+  }
 
   if (state.annualAmount <= 900) {
     return {
@@ -259,7 +317,7 @@ function adviceFor(result) {
     return {
       title: "투자금이 큰 구간에서는 절세계좌 한도를 채운 뒤 남는 돈의 세후 배치가 승부처입니다.",
       items: [
-        `연간 투자금 ${formatManwon(state.annualAmount)} 중 절세계좌 추천 비중은 ${taxShelterShare}%입니다.`,
+        `연간 투자금 ${formatManwon(state.annualAmount)}과 DC 추정액 ${formatManwon(result.dcContribution)}을 합친 기준에서 절세계좌 비중은 ${taxShelterShare}%입니다.`,
         `연금저축·IRP 세액공제 한도 여력은 약 ${formatManwon(pensionRoom)}입니다. 한도 밖 자금은 ISA와 일반 계좌 역할을 분리합니다.`,
         `기간 누적 재투자 여력은 약 ${formatManwon(result.compound)}으로 커지므로, 배당·해외 실현이익을 매년 점검해야 합니다.`,
       ],
@@ -319,11 +377,12 @@ function updateLabels() {
   qs("#amountLabel").textContent = formatManwon(state.annualAmount);
   qs("#foreignGainLabel").textContent = formatManwon(state.foreignGain);
   qs("#dividendLabel").textContent = formatManwon(state.dividendIncome);
+  qs("#salaryLabel").textContent = formatManwon(state.totalSalary);
   qs("#horizonLabel").textContent = `${state.horizon}년`;
   qs("#returnLabel").textContent = `${state.expectedReturn.toFixed(1)}%`;
 }
 
-function renderAllocation(allocation, amountByAccount) {
+function renderAllocation(allocation, amountByAccount, result) {
   let cursor = 0;
   const stops = accounts
     .map(({ key, color }) => {
@@ -341,7 +400,7 @@ function renderAllocation(allocation, amountByAccount) {
         ${label === accounts[0].label ? `
           <div class="allocation-note">
             <span>향후 1년 투자/운용 배분</span>
-            <small>연간 투자 가능 금액 기준입니다. DC형은 신규 납입보다 퇴직연금 적립금 운용 점검 몫으로 보세요.</small>
+            <small>내 투자 가능 금액 ${formatManwon(state.annualAmount)} + DC 회사부담금 추정 ${formatManwon(result.dcContribution)} 기준입니다. ${result.salaryProfile.label}</small>
           </div>
         ` : ""}
         <div class="allocation-row">
@@ -433,13 +492,13 @@ function render() {
   qs("#scoreMetric").textContent = String(result.score);
   qs("#scoreCaption").textContent = result.score >= 78 ? "절세 우선" : result.score >= 62 ? "균형 조합" : "공격형 조합";
   qs("#gapMetric").textContent = `차이 ${formatManwon(result.gap)}`;
-  qs("#chartAssumption").textContent = `시장 예측이 아니라 연 ${state.expectedReturn.toFixed(1)}% 기대수익률 가정 · 절세액 매년 재투자`;
+  qs("#chartAssumption").textContent = `시장 예측이 아니라 연 ${state.expectedReturn.toFixed(1)}% 기대수익률 가정 · 연 투자금+DC 추정액+절세액 재투자`;
   qs("#oneLineAdvice").textContent = advice.title;
   qs("#actionItems").innerHTML = advice.items.map((item) => `<li>${item}</li>`).join("");
   qs("#heroTaxDrag").textContent = `연 ${formatManwon(result.annualDefense)}`;
   qs("#heroRegular").textContent = `세후 ${formatManwon(result.regularWealth)}`;
   qs("#heroOptimized").textContent = `세후 ${formatManwon(result.optimizedWealth)}`;
-  renderAllocation(result.allocation, result.amountByAccount);
+  renderAllocation(result.allocation, result.amountByAccount, result);
   drawWealthChart(result);
 }
 
@@ -447,7 +506,7 @@ function applyPersona(persona) {
   state.persona = persona;
   Object.assign(state, personaDefaults[persona]);
   qsa(".persona-switch button").forEach((button) => button.classList.toggle("active", button.dataset.value === persona));
-  ["age", "annualAmount", "foreignGain", "dividendIncome", "incomeBand", "horizon", "expectedReturn"].forEach((id) => {
+  ["age", "annualAmount", "foreignGain", "dividendIncome", "totalSalary", "horizon", "expectedReturn"].forEach((id) => {
     qs(`#${id}`).value = state[id];
   });
   render();
@@ -458,16 +517,11 @@ function bindControls() {
     button.addEventListener("click", () => applyPersona(button.dataset.value));
   });
 
-  ["age", "annualAmount", "foreignGain", "dividendIncome", "horizon", "expectedReturn"].forEach((id) => {
+  ["age", "annualAmount", "foreignGain", "dividendIncome", "totalSalary", "horizon", "expectedReturn"].forEach((id) => {
     qs(`#${id}`).addEventListener("input", (event) => {
       state[id] = Number(event.target.value);
       render();
     });
-  });
-
-  qs("#incomeBand").addEventListener("change", (event) => {
-    state.incomeBand = event.target.value;
-    render();
   });
 }
 
