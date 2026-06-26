@@ -169,45 +169,108 @@ function calculate() {
 }
 
 function adviceFor(result) {
-  if (state.persona === "taxShield") {
+  const allocation = result.allocation;
+  const taxShelterShare = allocation.isa + allocation.pension + allocation.irp + allocation.dc;
+  const pensionStack = allocation.pension + allocation.irp + allocation.dc;
+  const pensionRoom = Math.max(0, 900 - Math.min(result.amountByAccount.pension, 600) - Math.min(result.amountByAccount.irp, 900));
+  const foreignTaxExposure = result.foreignTax;
+  const dividendTax = state.dividendIncome * 0.154;
+  const lead = leadAccount(allocation);
+
+  if (state.annualAmount <= 900) {
     return {
-      title: "연말정산이 목표라면 연금저축 600만원 축을 먼저 채우고 IRP는 오래 묶어도 되는 돈으로 보강하세요.",
+      title: "시드머니 단계에서는 계좌를 많이 늘리기보다 ISA 중심으로 출금 가능성을 지키는 편이 낫습니다.",
+      items: [
+        `연간 투자금 ${formatManwon(state.annualAmount)} 구간에서는 추천 1순위가 ${lead}입니다.`,
+        `연금저축·IRP·DC형 합산 비중은 ${pensionStack}%로 낮춰, 급한 지출 때문에 장기 계좌를 깨는 일을 줄입니다.`,
+        state.horizon < 7 ? "투자 기간이 짧으므로 세액공제보다 3년 전후 목돈 사용 가능성을 먼저 봅니다." : "기간이 길어질수록 연금저축을 소액 자동납입으로 붙여도 부담이 작아집니다.",
+      ],
+    };
+  }
+
+  if (state.horizon <= 5 && pensionStack >= 35) {
+    return {
+      title: "투자 기간이 짧다면 세액공제 욕심보다 묶이는 계좌 비중을 낮추는 것이 먼저입니다.",
+      items: [
+        `${state.horizon}년 안에 쓸 가능성이 있는 돈은 ISA와 일반 계좌에 더 많이 남겨 둡니다.`,
+        `현재 장기 계좌 묶음 비중은 ${pensionStack}%입니다. 중도해지 비용을 감당할 수 있는 돈인지 확인해야 합니다.`,
+        `절세 효과는 연 ${formatManwon(result.annualDefense)}으로 보이지만, 출금 타이밍을 잃으면 체감 수익률이 흔들립니다.`,
+      ],
+    };
+  }
+
+  if (state.foreignGain >= 2500) {
+    return {
+      title: "해외주식 실현이익이 큰 구간입니다. 지금은 계좌 비중보다 매도 시점과 손익통산 관리가 더 중요합니다.",
+      items: [
+        `해외주식 양도세 노출 추정치는 연 ${formatManwon(foreignTaxExposure)}입니다.`,
+        "실현이익을 한 해에 몰지 말고 손실 종목, 환율, 매도 연도를 같이 봅니다.",
+        `해외직투 비중은 ${allocation.foreign}%로 두되, 일부 글로벌 노출은 ISA·연금계좌 안의 국내 상장 해외 ETF와 비교합니다.`,
+      ],
+    };
+  }
+
+  if (state.dividendIncome >= 2000) {
+    return {
+      title: "배당·분배금 규모가 커졌습니다. 이제는 수익률보다 금융소득 과세 경계를 먼저 관리해야 합니다.",
+      items: [
+        `일반 계좌 배당·분배금 ${formatManwon(state.dividendIncome)}은 2,000만원 경계에 닿아 있습니다.`,
+        `배당 원천세 단순 추정치는 연 ${formatManwon(dividendTax)}이고, 절세계좌 비중은 ${taxShelterShare}%입니다.`,
+        "분배금이 많은 ETF는 ISA·연금계좌에 우선 배치하고, 일반 계좌에는 저분배·개별주 중심 자산을 남깁니다.",
+      ],
+    };
+  }
+
+  if (state.annualAmount >= 5000) {
+    return {
+      title: "투자금이 큰 구간에서는 절세계좌 한도를 채운 뒤 남는 돈의 세후 배치가 승부처입니다.",
+      items: [
+        `연간 투자금 ${formatManwon(state.annualAmount)} 중 절세계좌 추천 비중은 ${taxShelterShare}%입니다.`,
+        `연금저축·IRP 세액공제 한도 여력은 약 ${formatManwon(pensionRoom)}입니다. 한도 밖 자금은 ISA와 일반 계좌 역할을 분리합니다.`,
+        `기간 누적 재투자 여력은 약 ${formatManwon(result.compound)}으로 커지므로, 배당·해외 실현이익을 매년 점검해야 합니다.`,
+      ],
+    };
+  }
+
+  if (state.foreignGain > 250) {
+    return {
+      title: "해외주식 이익이 기본공제를 넘었습니다. 미국 직투는 세전 수익률이 아니라 세후 수익률로 봐야 합니다.",
+      items: [
+        `해외주식 양도세 노출 추정치는 연 ${formatManwon(foreignTaxExposure)}입니다.`,
+        `해외직투 비중 ${allocation.foreign}%와 ISA 비중 ${allocation.isa}%를 함께 보며 글로벌 노출을 나눕니다.`,
+        "실현이익이 커지는 해에는 손실 통산, 매도 분산, 국내 상장 해외 ETF 대체 가능성을 같이 검토합니다.",
+      ],
+    };
+  }
+
+  if (state.horizon >= 15 || state.age >= 50) {
+    return {
+      title: "기간이 길거나 은퇴가 가까울수록 연금저축·IRP·DC형을 하나의 노후 포트폴리오로 묶어 봐야 합니다.",
+      items: [
+        `장기 계좌 묶음 비중은 ${pensionStack}%이고, 기간 누적 재투자 여력은 약 ${formatManwon(result.compound)}입니다.`,
+        state.age >= 50 ? "연금 수령 나이와 수령 기간을 먼저 정해야 중도해지 리스크를 줄일 수 있습니다." : "투자 기간이 길기 때문에 과세이연 효과가 짧은 목돈 전략보다 크게 작동합니다.",
+        "DC형 퇴직연금이 원리금보장 상품에 방치되어 있는지 확인하고, 연금계좌 전체의 위험자산 비중을 맞춥니다.",
+      ],
+    };
+  }
+
+  if (state.persona === "taxShield" || result.pensionCredit >= 60) {
+    return {
+      title: "연말정산 효과가 의미 있는 구간입니다. 연금저축 600만원 축을 먼저 보고 IRP는 묶어도 되는 돈으로 보강하세요.",
       items: [
         `세액공제 추정 기여분은 연 ${formatManwon(result.pensionCredit)}입니다.`,
+        `연간 투자금 ${formatManwon(state.annualAmount)}에서는 세액공제 한도와 ISA 납입 여력을 동시에 나눠야 합니다.`,
         "환급액은 소비 예산이 아니라 다음 해 납입 원금으로 다시 넣어야 복리 효과가 살아납니다.",
-        "3년 안에 쓸 돈은 IRP 대신 ISA나 현금성 자산으로 분리합니다.",
-      ],
-    };
-  }
-
-  if (state.persona === "global") {
-    return {
-      title: "미국 직투는 세전 수익률이 아니라 250만원 공제 이후의 세후 수익률로 판단해야 합니다.",
-      items: [
-        `현재 해외주식 양도세 노출 추정치는 연 ${formatManwon(result.foreignTax)}입니다.`,
-        "해외 상장 ETF 직접투자와 국내 상장 해외 ETF의 세금·환율·상품비용을 같이 비교합니다.",
-        "실현이익을 한 해에 몰지 말고 손실 통산과 매도 시점을 함께 계획합니다.",
-      ],
-    };
-  }
-
-  if (state.persona === "retirement") {
-    return {
-      title: "노후자금은 연금저축·IRP·DC형을 분리하지 말고 하나의 장기 포트폴리오로 봐야 합니다.",
-      items: [
-        `기간 누적 재투자 여력은 약 ${formatManwon(result.compound)}입니다.`,
-        "DC형 퇴직연금이 원리금보장 상품에 방치되어 있는지 먼저 확인합니다.",
-        "연금 수령 나이와 수령 기간을 정해야 중도해지 리스크를 줄일 수 있습니다.",
       ],
     };
   }
 
   return {
-    title: "초보자는 세금보다 유동성이 먼저입니다. ISA를 중심으로 3년 돈의 그릇을 만들고 연금계좌는 작게 시작하세요.",
+    title: "중간 투자금 구간에서는 ISA를 중심축으로 두고 연금저축을 보조 엔진처럼 붙이는 균형 전략이 좋습니다.",
     items: [
-      `추천 조합의 1순위 계좌는 ${leadAccount(result.allocation)}입니다.`,
-      "목돈 계좌와 노후 계좌를 분리하면 급한 지출 때문에 장기 계좌를 깨는 일을 줄일 수 있습니다.",
-      "일반 계좌는 완전히 배제하는 곳이 아니라 유동성과 개별 종목 학습을 담당하는 공간입니다.",
+      `추천 1순위는 ${lead}이고, 절세계좌 합산 비중은 ${taxShelterShare}%입니다.`,
+      `연간 절세/방어 가치는 약 ${formatManwon(result.annualDefense)}, ${state.horizon}년 누적 재투자 여력은 약 ${formatManwon(result.compound)}입니다.`,
+      "일반 계좌는 완전히 배제하지 말고 단기 유동성, 개별 종목 학습, 세금 한도 밖 자금의 공간으로 남깁니다.",
     ],
   };
 }
