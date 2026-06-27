@@ -362,6 +362,11 @@
                   <output id="privatePensionLabel">0만원</output>
                 </label>
                 <label>
+                  <span>배우자 결정세액</span>
+                  <input id="spouseTaxDue" type="range" min="0" max="400" step="10" value="0" />
+                  <output id="spouseTaxDueLabel">0만원</output>
+                </label>
+                <label>
                   <span>신분/건보 프로파일</span>
                   <select id="taxProfile">
                     <option value="general">일반</option>
@@ -371,6 +376,14 @@
                   </select>
                   <output id="profileLabel">일반</output>
                 </label>
+                <label>
+                  <span>진단 단위</span>
+                  <select id="householdMode">
+                    <option value="individual">개인 기준</option>
+                    <option value="couple">부부 명의 분산</option>
+                  </select>
+                  <output id="householdLabel">개인 기준</output>
+                </label>
               </div>
             </div>
           </form>
@@ -378,9 +391,9 @@
           <section class="result-stage" aria-label="시뮬레이션 결과">
             <div class="metric-strip">
               <div>
-                <span>연간 절세/방어 가치</span>
+                <span>연간 순 방어 가치</span>
                 <strong id="savingMetric">0만원</strong>
-                <small>세액공제 + ISA 과세차 + 해외직투 관리</small>
+                <small>세액공제 + ISA 과세차 - 건보료 비용</small>
               </div>
               <div>
                 <span>기간 누적 재투자 여력</span>
@@ -408,7 +421,7 @@
             <div class="timeline-panel">
               <div class="timeline-copy">
                 <div>
-                  <span>동일 수익률 적립 시뮬레이션</span>
+                  <span>세후 순자산 시뮬레이션</span>
                   <small id="chartAssumption">연 5.5% · 절세액 매년 재투자</small>
                 </div>
                 <strong id="gapMetric">차이 0만원</strong>

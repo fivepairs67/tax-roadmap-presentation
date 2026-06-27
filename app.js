@@ -20,6 +20,7 @@ const numericFields = [
   "isaRoom",
   "financialIncome",
   "privatePensionIncome",
+  "spouseTaxDue",
 ];
 
 const TAX_PROFILE_LABELS = {
@@ -29,11 +30,16 @@ const TAX_PROFILE_LABELS = {
   globalTaxed: "최근 금융소득종합과세 이력",
 };
 
+const HOUSEHOLD_MODE_LABELS = {
+  individual: "개인 기준",
+  couple: "부부 명의 분산",
+};
+
 const personaDefaults = {
-  starter: { age: 35, annualAmount: 1800, foreignGain: 600, dividendIncome: 300, totalSalary: 6000, horizon: 10, expectedReturn: 5.5, nearTermNeed: 500, taxDue: 90, isaRoom: 2000, financialIncome: 300, privatePensionIncome: 0, taxProfile: "general" },
-  taxShield: { age: 42, annualAmount: 2400, foreignGain: 300, dividendIncome: 400, totalSalary: 5000, horizon: 12, expectedReturn: 5.5, nearTermNeed: 400, taxDue: 140, isaRoom: 2000, financialIncome: 400, privatePensionIncome: 0, taxProfile: "general" },
-  global: { age: 38, annualAmount: 3200, foreignGain: 2200, dividendIncome: 500, totalSalary: 8500, horizon: 10, expectedReturn: 6.5, nearTermNeed: 300, taxDue: 180, isaRoom: 2000, financialIncome: 800, privatePensionIncome: 0, taxProfile: "general" },
-  retirement: { age: 50, annualAmount: 2800, foreignGain: 400, dividendIncome: 600, totalSalary: 9000, horizon: 18, expectedReturn: 5, nearTermNeed: 700, taxDue: 160, isaRoom: 2000, financialIncome: 1200, privatePensionIncome: 1200, taxProfile: "retired" },
+  starter: { age: 35, annualAmount: 1800, foreignGain: 600, dividendIncome: 300, totalSalary: 6000, horizon: 10, expectedReturn: 5.5, nearTermNeed: 500, taxDue: 90, isaRoom: 2000, financialIncome: 300, privatePensionIncome: 0, spouseTaxDue: 0, taxProfile: "general", householdMode: "individual" },
+  taxShield: { age: 42, annualAmount: 2400, foreignGain: 300, dividendIncome: 400, totalSalary: 5000, horizon: 12, expectedReturn: 5.5, nearTermNeed: 400, taxDue: 140, isaRoom: 2000, financialIncome: 400, privatePensionIncome: 0, spouseTaxDue: 0, taxProfile: "general", householdMode: "individual" },
+  global: { age: 38, annualAmount: 3200, foreignGain: 2200, dividendIncome: 500, totalSalary: 8500, horizon: 10, expectedReturn: 6.5, nearTermNeed: 300, taxDue: 180, isaRoom: 2000, financialIncome: 800, privatePensionIncome: 0, spouseTaxDue: 0, taxProfile: "general", householdMode: "individual" },
+  retirement: { age: 50, annualAmount: 2800, foreignGain: 400, dividendIncome: 600, totalSalary: 9000, horizon: 18, expectedReturn: 5, nearTermNeed: 700, taxDue: 160, isaRoom: 2000, financialIncome: 1200, privatePensionIncome: 1200, spouseTaxDue: 0, taxProfile: "retired", householdMode: "individual" },
 };
 
 const LIMITS = {
@@ -133,22 +139,54 @@ function estimateDcContribution() {
   return state.totalSalary / 12;
 }
 
+function householdMultiplier() {
+  return state.householdMode === "couple" ? 2 : 1;
+}
+
+function totalCreditTaxDue() {
+  return Math.max(0, state.taxDue + (state.householdMode === "couple" ? state.spouseTaxDue : 0));
+}
+
+function estimateHealthInsuranceCost(gates) {
+  if (!gates.healthSensitive || !gates.financialInsuranceWatch) return 0;
+  const excess = Math.max(0, gates.insuranceIncome - 1000);
+  return Math.round(120 + Math.min(120, excess * 0.12));
+}
+
+function pensionExitTaxRate(endAge, gates) {
+  if (endAge < 55) return 0.165;
+  if (gates.pensionIncomeWatch) return 0.165;
+  if (endAge >= 80) return 0.033;
+  if (endAge >= 70) return 0.044;
+  return 0.055;
+}
+
+function estimatePensionExitTax(amountByAccount, years, rate, gates) {
+  if (years <= 0) return 0;
+  const pensionAnnual = Math.max(0, (amountByAccount.pension ?? 0) + (amountByAccount.irp ?? 0));
+  if (pensionAnnual <= 0) return 0;
+  const taxableBalance = pensionAnnual * futureValueFactor(rate, years);
+  return taxableBalance * pensionExitTaxRate(state.age + years, gates);
+}
+
 function riskSettings(profile = salaryProfile()) {
   const nearTermNeed = clamp(state.nearTermNeed, 0, state.annualAmount);
   const lockableAnnual = Math.max(0, state.annualAmount - nearTermNeed);
-  const isaBlocked = state.taxProfile === "globalTaxed";
+  const financialComprehensiveWatch = state.financialIncome > 2000;
+  const isaBlocked = state.taxProfile === "globalTaxed" || financialComprehensiveWatch;
   const healthSensitive = state.taxProfile === "dependent" || state.taxProfile === "retired";
-  const financialInsuranceWatch = state.financialIncome > 1000;
-  const financialComprehensiveWatch = state.financialIncome >= 2000;
+  const insuranceIncome = state.financialIncome + (state.taxProfile === "retired" ? state.privatePensionIncome : 0);
+  const financialInsuranceWatch = insuranceIncome > 1000;
   const pensionIncomeWatch = state.privatePensionIncome >= 1500;
   const liquidityWatch = nearTermNeed >= Math.max(300, state.annualAmount * 0.35) || state.horizon <= 3;
-  const pensionCreditCapacity = profile.pensionCreditRate > 0 ? state.taxDue / profile.pensionCreditRate : 0;
+  const pensionCreditCapacity = profile.pensionCreditRate > 0 ? totalCreditTaxDue() / profile.pensionCreditRate : 0;
 
   return {
     nearTermNeed,
     lockableAnnual,
     isaBlocked,
     healthSensitive,
+    insuranceIncome,
     financialInsuranceWatch,
     financialComprehensiveWatch,
     pensionIncomeWatch,
@@ -168,13 +206,16 @@ function buildPlan() {
   const foreignPressure = state.foreignGain > 250 ? Math.min(1, (state.foreignGain - 250) / 2750) : 0;
   const dividendPressure = state.dividendIncome >= 1000 ? Math.min(1, state.dividendIncome / 2500) : 0;
   const lockableAnnual = gates.lockableAnnual;
-  const creditEligibleRoom = Math.min(LIMITS.pensionTotalCredit, Math.max(0, gates.pensionCreditCapacity));
+  const multiplier = householdMultiplier();
+  const pensionCreditLimit = LIMITS.pensionCredit * multiplier;
+  const pensionTotalCreditLimit = LIMITS.pensionTotalCredit * multiplier;
+  const creditEligibleRoom = Math.min(pensionTotalCreditLimit, Math.max(0, gates.pensionCreditCapacity));
   const pensionRiskScale = gates.pensionIncomeWatch && state.age >= 50 ? 0.55 : 1;
 
   if (annual <= 900) {
     const isaTarget = Math.min(gates.isaCapacity, lockableAnnual * (isShort ? 0.38 : 0.52));
     const pensionTarget = Math.min(
-      LIMITS.pensionCredit,
+      pensionCreditLimit,
       creditEligibleRoom,
       lockableAnnual * (isLong ? 0.14 : 0.06) * pensionRiskScale,
     );
@@ -215,11 +256,11 @@ function buildPlan() {
     lockableAnnual * (isaBase + dividendPressure * 0.05 + foreignPressure * 0.04 - (isLong ? 0.03 : 0)),
   );
   const pensionTarget = Math.min(
-    LIMITS.pensionCredit,
+    pensionCreditLimit,
     creditEligibleRoom,
     lockableAnnual * (pensionBase + (profile.pensionCreditRate === 0.165 ? 0.04 : 0) + (isLong ? 0.05 : 0) + (state.age >= 50 ? 0.03 : 0)) * pensionRiskScale,
   );
-  const irpLimit = Math.max(0, Math.min(LIMITS.pensionTotalCredit, creditEligibleRoom) - pensionTarget);
+  const irpLimit = Math.max(0, Math.min(pensionTotalCreditLimit, creditEligibleRoom) - pensionTarget);
   const irpTarget = Math.min(
     irpLimit,
     Math.max(0, lockableAnnual - pensionTarget - isaTarget),
@@ -247,11 +288,12 @@ function calculate() {
   const { allocation, amountByAccount, dcContribution, salaryProfile: profile, gates } = buildPlan();
   const annual = state.annualAmount;
   const expectedReturn = state.expectedReturn / 100;
-  const pensionEligible = Math.min(amountByAccount.pension, 600);
-  const irpEligible = Math.min(amountByAccount.irp, Math.max(0, 900 - pensionEligible));
+  const multiplier = householdMultiplier();
+  const pensionEligible = Math.min(amountByAccount.pension, LIMITS.pensionCredit * multiplier);
+  const irpEligible = Math.min(amountByAccount.irp, Math.max(0, LIMITS.pensionTotalCredit * multiplier - pensionEligible));
   const creditRate = profile.pensionCreditRate;
   const rawPensionCredit = (pensionEligible + irpEligible) * creditRate;
-  const pensionCredit = Math.min(rawPensionCredit, Math.max(0, state.taxDue));
+  const pensionCredit = Math.min(rawPensionCredit, totalCreditTaxDue());
   const lostPensionCredit = Math.max(0, rawPensionCredit - pensionCredit);
 
   const isaGain = amountByAccount.isa * expectedReturn * 3;
@@ -264,14 +306,18 @@ function calculate() {
   const foreignManagementSaving = foreignTax * Math.min(0.7, allocation.isa / 100 + allocation.domestic / 220);
   const dividendTax = state.dividendIncome * 0.154;
   const dividendDeferral = dividendTax * ((allocation.isa + allocation.pension + allocation.irp + allocation.dc) / 100) * 0.35;
+  const healthInsuranceCost = estimateHealthInsuranceCost(gates);
 
-  const annualDefense = pensionCredit + isaSaving + foreignManagementSaving + dividendDeferral;
+  const annualDefenseGross = pensionCredit + isaSaving + foreignManagementSaving + dividendDeferral;
+  const annualDefense = annualDefenseGross - healthInsuranceCost;
   const rate = expectedReturn;
   const factor = futureValueFactor(rate, state.horizon);
   const compound = annualDefense * factor;
   const annualContribution = annual + dcContribution;
   const regularWealth = annualContribution * factor;
-  const optimizedWealth = (annualContribution + annualDefense) * factor;
+  const optimizedGrossWealth = (annualContribution + annualDefense) * factor;
+  const pensionExitTax = estimatePensionExitTax(amountByAccount, state.horizon, rate, gates);
+  const optimizedWealth = optimizedGrossWealth - pensionExitTax;
   const gap = optimizedWealth - regularWealth;
   const riskPenalty =
     (gates.isaBlocked ? 16 : 0) +
@@ -279,6 +325,8 @@ function calculate() {
     (gates.pensionIncomeWatch ? 8 : 0) +
     (gates.healthSensitive && gates.financialInsuranceWatch ? 8 : 0) +
     (gates.financialComprehensiveWatch ? 8 : 0) +
+    (healthInsuranceCost > 0 ? 10 : 0) +
+    (pensionExitTax > 0 ? 6 : 0) +
     (lostPensionCredit > 0 ? 8 : 0) +
     (state.taxDue < 50 ? 6 : 0);
   const score = clamp(
@@ -305,6 +353,9 @@ function calculate() {
     rawPensionCredit,
     pensionCredit,
     lostPensionCredit,
+    healthInsuranceCost,
+    annualDefenseGross,
+    pensionExitTax,
     isaSaving,
     foreignTax,
     annualDefense,
@@ -327,7 +378,7 @@ function riskGateFor(result) {
   const gates = result.gates;
 
   if (gates.isaBlocked) {
-    items.push("최근 금융소득종합과세 이력이 있으면 ISA 신규 가입이 제한될 수 있습니다.");
+    items.push("금융소득종합과세 이력 또는 금융소득 2,000만원 초과 입력으로 ISA 배분을 0원 처리했습니다.");
   } else if (state.isaRoom !== LIMITS.isaAnnual) {
     items.push(`ISA 배분은 입력한 올해 납입 여력 ${formatManwon(state.isaRoom)} 안에서만 계산했습니다.`);
   }
@@ -346,8 +397,12 @@ function riskGateFor(result) {
     items.push("사적연금 연 1,500만원 경계에서는 연금 수령 방식과 과세 선택을 먼저 점검합니다.");
   }
 
+  if (result.pensionExitTax > 0) {
+    items.push(`그래프 최종값은 연금계좌 인출세 추정 ${formatManwon(result.pensionExitTax)}을 차감한 순자산입니다.`);
+  }
+
   if (gates.healthSensitive && gates.financialInsuranceWatch) {
-    items.push("피부양자·은퇴 예정자는 금융소득이 건보료 산정 소득에 반영되는지 확인해야 합니다.");
+    items.push(`피부양자·은퇴 예정자 건보료 비용을 연 ${formatManwon(result.healthInsuranceCost)} 차감했습니다.`);
   }
 
   if (gates.financialComprehensiveWatch) {
@@ -362,6 +417,10 @@ function riskGateFor(result) {
     items.push("은퇴가 가깝거나 기간이 짧으면 DC형 원리금보장 상품도 방어 자산 후보입니다.");
   }
 
+  if (state.householdMode === "couple") {
+    items.push("부부 모드는 명의별 계좌 자격과 배우자 증여 공제 범위를 따로 확인해야 합니다.");
+  }
+
   if (items.length < 3) {
     items.push("부부 공동 자금은 명의별 한도와 배우자 증여 공제 범위를 나눠서 봅니다.");
   }
@@ -371,7 +430,6 @@ function riskGateFor(result) {
   if (items.length < 3) {
     items.push("해외주식 기본공제 활용은 손익통산, 결제일, 환전·매매 비용을 같이 비교합니다.");
   }
-
   const severe = [
     gates.isaBlocked,
     gates.pensionIncomeWatch,
@@ -379,6 +437,7 @@ function riskGateFor(result) {
     gates.financialComprehensiveWatch,
     result.lostPensionCredit > 0,
     state.taxDue < 50,
+    result.healthInsuranceCost > 0,
   ].filter(Boolean).length;
   const level = severe >= 2 || gates.isaBlocked ? "주의 높음" : severe === 1 || gates.liquidityWatch ? "조건부 진행" : "기본 통과";
 
@@ -398,10 +457,10 @@ function adviceFor(result) {
 
   if (gates.isaBlocked) {
     return {
-      title: "ISA 가입 결격 가능성이 먼저입니다. 최근 금융소득종합과세 이력이 있으면 ISA 배분은 제외하고 시작해야 합니다.",
+      title: "ISA 가입 결격 가능성이 먼저입니다. 금융소득 2,000만원 초과 또는 최근 종합과세 이력이 있으면 ISA 배분은 제외합니다.",
       items: [
         "ISA를 0원으로 두고, 일반 계좌·연금계좌·해외직투의 세후 비용을 다시 비교합니다.",
-        `현재 금융소득 입력값은 연 ${formatManwon(state.financialIncome)}입니다. 가입 가능 여부는 최근 3개 과세기간 이력을 확인해야 합니다.`,
+        `현재 금융소득 입력값은 연 ${formatManwon(state.financialIncome)}입니다. 화면의 ISA 배분도 0원으로 강제 처리했습니다.`,
         "고액 자산가는 절세 계좌 한도보다 건보료, 종합과세, 유동성 제약을 먼저 검증합니다.",
       ],
     };
@@ -444,7 +503,7 @@ function adviceFor(result) {
     return {
       title: "금융소득이 건보료 경계에 걸립니다. 세금보다 건강보험료와 피부양자 자격을 먼저 확인해야 합니다.",
       items: [
-        `현재 금융소득 입력값은 연 ${formatManwon(state.financialIncome)}입니다.`,
+        `건보료 비용 추정치 연 ${formatManwon(result.healthInsuranceCost)}을 연간 방어 가치에서 차감했습니다.`,
         "피부양자 또는 은퇴 예정자는 금융소득이 보험료 산정 소득에 반영되는지 확인한 뒤 배당·분배금 자산을 배치합니다.",
         "절세계좌 만기 자금을 연금계좌로 넘길 때도 향후 연금 수령액과 건보료 영향을 함께 봅니다.",
       ],
@@ -589,7 +648,9 @@ function updateLabels() {
   qs("#isaRoomLabel").textContent = formatManwon(state.isaRoom);
   qs("#financialIncomeLabel").textContent = formatManwon(state.financialIncome);
   qs("#privatePensionLabel").textContent = formatManwon(state.privatePensionIncome);
+  qs("#spouseTaxDueLabel").textContent = formatManwon(state.spouseTaxDue);
   qs("#profileLabel").textContent = TAX_PROFILE_LABELS[state.taxProfile] ?? "일반";
+  qs("#householdLabel").textContent = HOUSEHOLD_MODE_LABELS[state.householdMode] ?? "개인 기준";
 }
 
 function renderAllocation(allocation, amountByAccount, result) {
@@ -610,7 +671,7 @@ function renderAllocation(allocation, amountByAccount, result) {
         ${label === accounts[0].label ? `
           <div class="allocation-note">
             <span>향후 1년 투자/운용 배분</span>
-            <small>내 투자 가능 금액 ${formatManwon(state.annualAmount)} + DC 회사부담금 추정 ${formatManwon(result.dcContribution)} 기준입니다. ${result.salaryProfile.label}</small>
+            <small>${HOUSEHOLD_MODE_LABELS[state.householdMode]} · 투자 가능 금액 ${formatManwon(state.annualAmount)} + DC 회사부담금 추정 ${formatManwon(result.dcContribution)} 기준입니다. ${result.salaryProfile.label}</small>
           </div>
         ` : ""}
         <div class="allocation-row">
@@ -640,7 +701,8 @@ function drawWealthChart(result) {
   const points = Array.from({ length: state.horizon + 1 }, (_, year) => {
     const factor = futureValueFactor(rate, year);
     const regular = result.annualContribution * factor;
-    const optimized = (result.annualContribution + result.annualDefense) * factor;
+    const pensionExitTax = estimatePensionExitTax(result.amountByAccount, year, rate, result.gates);
+    const optimized = (result.annualContribution + result.annualDefense) * factor - pensionExitTax;
     return { year, regular, optimized };
   });
   const maxValue = Math.max(...points.map((point) => point.optimized), 1);
@@ -703,7 +765,7 @@ function render() {
   qs("#scoreMetric").textContent = String(result.score);
   qs("#scoreCaption").textContent = riskGate.level;
   qs("#gapMetric").textContent = `차이 ${formatManwon(result.gap)}`;
-  qs("#chartAssumption").textContent = `시장 예측이 아니라 연 ${state.expectedReturn.toFixed(1)}% 기대수익률 가정 · 연 투자금+DC 추정액+리스크 차감 절세액 재투자`;
+  qs("#chartAssumption").textContent = `연 ${state.expectedReturn.toFixed(1)}% 가정 · 건보료 비용과 연금 인출세 추정치를 차감한 순자산`;
   qs("#oneLineAdvice").textContent = advice.title;
   qs("#actionItems").innerHTML = advice.items.map((item) => `<li>${item}</li>`).join("");
   qs("#riskLevel").textContent = riskGate.level;
@@ -723,6 +785,7 @@ function applyPersona(persona) {
     qs(`#${id}`).value = state[id];
   });
   qs("#taxProfile").value = state.taxProfile;
+  qs("#householdMode").value = state.householdMode;
   render();
 }
 
@@ -739,6 +802,10 @@ function bindControls() {
   });
   qs("#taxProfile").addEventListener("change", (event) => {
     state.taxProfile = event.target.value;
+    render();
+  });
+  qs("#householdMode").addEventListener("change", (event) => {
+    state.householdMode = event.target.value;
     render();
   });
 }
