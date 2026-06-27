@@ -670,7 +670,7 @@ p {
 
 .simulator-shell {
   display: grid;
-  grid-template-columns: minmax(300px, 0.4fr) minmax(0, 1fr);
+  grid-template-columns: minmax(420px, 0.48fr) minmax(0, 1fr);
   gap: 14px;
   align-items: start;
 }
@@ -754,6 +754,40 @@ p {
   font-size: 17px;
   font-weight: 900;
   font-variant-numeric: tabular-nums;
+}
+
+.risk-inputs {
+  display: grid;
+  gap: 10px;
+  padding-top: 12px;
+  border-top: 1px solid var(--line);
+}
+
+.risk-input-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.risk-input-head span {
+  color: var(--blue);
+  font-size: 12px;
+  font-weight: 900;
+  text-transform: uppercase;
+}
+
+.risk-input-head strong {
+  color: var(--ink);
+  font-size: 13px;
+}
+
+.risk-grid label {
+  padding: 10px;
+}
+
+.risk-grid output {
+  font-size: 15px;
 }
 
 input[type="range"] {
@@ -998,6 +1032,36 @@ select {
   word-break: keep-all;
 }
 
+.risk-gate {
+  display: grid;
+  gap: 8px;
+  margin-top: 16px;
+  padding: 14px;
+  border: 1px solid #d9c7bf;
+  border-radius: 8px;
+  background: #fff8f4;
+}
+
+.risk-gate span {
+  color: var(--rust);
+}
+
+.risk-gate strong {
+  color: var(--ink);
+  font-size: 18px;
+}
+
+.risk-gate ul {
+  display: grid;
+  gap: 6px;
+  margin: 0;
+  padding-left: 18px;
+  color: var(--soft);
+  font-size: 13px;
+  line-height: 1.45;
+  word-break: keep-all;
+}
+
 .playbook-steps {
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
@@ -1190,10 +1254,10 @@ select {
   }
 
   .result-stage {
-    grid-template-columns: minmax(0, 1fr) minmax(280px, 0.72fr);
+    grid-template-columns: minmax(0, 1.18fr) minmax(300px, 0.72fr);
     grid-template-areas:
       "metrics metrics"
-      "chart chart"
+      "chart advice"
       "timeline advice";
     align-items: stretch;
   }
@@ -1212,6 +1276,19 @@ select {
 
   .advice-card {
     grid-area: advice;
+  }
+
+  .persona-switch {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .persona-switch button {
+    grid-template-columns: 1fr;
+    align-content: center;
+  }
+
+  .risk-grid {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
   }
 }
 

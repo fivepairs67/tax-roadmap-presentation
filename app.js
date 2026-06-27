@@ -7,11 +7,33 @@ const accounts = [
   { key: "foreign", label: "해외직투", color: "#b96958" },
 ];
 
+const numericFields = [
+  "age",
+  "annualAmount",
+  "foreignGain",
+  "dividendIncome",
+  "totalSalary",
+  "horizon",
+  "expectedReturn",
+  "nearTermNeed",
+  "taxDue",
+  "isaRoom",
+  "financialIncome",
+  "privatePensionIncome",
+];
+
+const TAX_PROFILE_LABELS = {
+  general: "일반",
+  dependent: "피부양자/피부양 예정",
+  retired: "은퇴·지역가입 전환 예정",
+  globalTaxed: "최근 금융소득종합과세 이력",
+};
+
 const personaDefaults = {
-  starter: { age: 35, annualAmount: 1800, foreignGain: 600, dividendIncome: 300, totalSalary: 6000, horizon: 10, expectedReturn: 5.5 },
-  taxShield: { age: 42, annualAmount: 2400, foreignGain: 300, dividendIncome: 400, totalSalary: 5000, horizon: 12, expectedReturn: 5.5 },
-  global: { age: 38, annualAmount: 3200, foreignGain: 2200, dividendIncome: 500, totalSalary: 8500, horizon: 10, expectedReturn: 6.5 },
-  retirement: { age: 50, annualAmount: 2800, foreignGain: 400, dividendIncome: 600, totalSalary: 9000, horizon: 18, expectedReturn: 5 },
+  starter: { age: 35, annualAmount: 1800, foreignGain: 600, dividendIncome: 300, totalSalary: 6000, horizon: 10, expectedReturn: 5.5, nearTermNeed: 500, taxDue: 90, isaRoom: 2000, financialIncome: 300, privatePensionIncome: 0, taxProfile: "general" },
+  taxShield: { age: 42, annualAmount: 2400, foreignGain: 300, dividendIncome: 400, totalSalary: 5000, horizon: 12, expectedReturn: 5.5, nearTermNeed: 400, taxDue: 140, isaRoom: 2000, financialIncome: 400, privatePensionIncome: 0, taxProfile: "general" },
+  global: { age: 38, annualAmount: 3200, foreignGain: 2200, dividendIncome: 500, totalSalary: 8500, horizon: 10, expectedReturn: 6.5, nearTermNeed: 300, taxDue: 180, isaRoom: 2000, financialIncome: 800, privatePensionIncome: 0, taxProfile: "general" },
+  retirement: { age: 50, annualAmount: 2800, foreignGain: 400, dividendIncome: 600, totalSalary: 9000, horizon: 18, expectedReturn: 5, nearTermNeed: 700, taxDue: 160, isaRoom: 2000, financialIncome: 1200, privatePensionIncome: 1200, taxProfile: "retired" },
 };
 
 const LIMITS = {
@@ -111,27 +133,62 @@ function estimateDcContribution() {
   return state.totalSalary / 12;
 }
 
+function riskSettings(profile = salaryProfile()) {
+  const nearTermNeed = clamp(state.nearTermNeed, 0, state.annualAmount);
+  const lockableAnnual = Math.max(0, state.annualAmount - nearTermNeed);
+  const isaBlocked = state.taxProfile === "globalTaxed";
+  const healthSensitive = state.taxProfile === "dependent" || state.taxProfile === "retired";
+  const financialInsuranceWatch = state.financialIncome > 1000;
+  const financialComprehensiveWatch = state.financialIncome >= 2000;
+  const pensionIncomeWatch = state.privatePensionIncome >= 1500;
+  const liquidityWatch = nearTermNeed >= Math.max(300, state.annualAmount * 0.35) || state.horizon <= 3;
+  const pensionCreditCapacity = profile.pensionCreditRate > 0 ? state.taxDue / profile.pensionCreditRate : 0;
+
+  return {
+    nearTermNeed,
+    lockableAnnual,
+    isaBlocked,
+    healthSensitive,
+    financialInsuranceWatch,
+    financialComprehensiveWatch,
+    pensionIncomeWatch,
+    liquidityWatch,
+    pensionCreditCapacity,
+    isaCapacity: isaBlocked ? 0 : Math.min(Math.max(0, state.isaRoom), state.annualAmount),
+  };
+}
+
 function buildPlan() {
   const annual = Math.max(0, state.annualAmount);
   const profile = salaryProfile();
+  const gates = riskSettings(profile);
   const isShort = state.horizon <= 5;
   const isLong = state.horizon >= 15;
   const dcContribution = estimateDcContribution();
   const foreignPressure = state.foreignGain > 250 ? Math.min(1, (state.foreignGain - 250) / 2750) : 0;
   const dividendPressure = state.dividendIncome >= 1000 ? Math.min(1, state.dividendIncome / 2500) : 0;
+  const lockableAnnual = gates.lockableAnnual;
+  const creditEligibleRoom = Math.min(LIMITS.pensionTotalCredit, Math.max(0, gates.pensionCreditCapacity));
+  const pensionRiskScale = gates.pensionIncomeWatch && state.age >= 50 ? 0.55 : 1;
 
   if (annual <= 900) {
+    const isaTarget = Math.min(gates.isaCapacity, lockableAnnual * (isShort ? 0.38 : 0.52));
+    const pensionTarget = Math.min(
+      LIMITS.pensionCredit,
+      creditEligibleRoom,
+      lockableAnnual * (isLong ? 0.14 : 0.06) * pensionRiskScale,
+    );
     const smallAmounts = normalizeUserAmountsToAnnual(
       {
-        isa: annual * (isShort ? 0.7 : 0.62),
-        pension: annual * (isLong ? 0.14 : 0.08),
+        isa: isaTarget,
+        pension: pensionTarget,
         irp: 0,
         foreign: annual * (state.persona === "global" ? 0.1 : 0.04),
       },
       annual,
     );
     const amountByAccount = { ...smallAmounts, dc: dcContribution };
-    return { amountByAccount, allocation: normalizeAllocation(amountByAccount), dcContribution, salaryProfile: profile };
+    return { amountByAccount, allocation: normalizeAllocation(amountByAccount), dcContribution, salaryProfile: profile, gates };
   }
 
   const isaBase =
@@ -153,17 +210,20 @@ function buildPlan() {
     0.1;
 
   const isaTarget = Math.min(
-    LIMITS.isaAnnual,
-    annual * (isaBase + dividendPressure * 0.05 + foreignPressure * 0.04 - (isLong ? 0.03 : 0)),
+    gates.isaCapacity,
+    lockableAnnual,
+    lockableAnnual * (isaBase + dividendPressure * 0.05 + foreignPressure * 0.04 - (isLong ? 0.03 : 0)),
   );
   const pensionTarget = Math.min(
     LIMITS.pensionCredit,
-    annual * (pensionBase + (profile.pensionCreditRate === 0.165 ? 0.04 : 0) + (isLong ? 0.05 : 0) + (state.age >= 50 ? 0.03 : 0)),
+    creditEligibleRoom,
+    lockableAnnual * (pensionBase + (profile.pensionCreditRate === 0.165 ? 0.04 : 0) + (isLong ? 0.05 : 0) + (state.age >= 50 ? 0.03 : 0)) * pensionRiskScale,
   );
-  const irpLimit = Math.max(0, LIMITS.pensionTotalCredit - pensionTarget);
+  const irpLimit = Math.max(0, Math.min(LIMITS.pensionTotalCredit, creditEligibleRoom) - pensionTarget);
   const irpTarget = Math.min(
     irpLimit,
-    annual * (irpBase + (isLong ? 0.03 : 0) + (state.age >= 50 ? 0.02 : 0)),
+    Math.max(0, lockableAnnual - pensionTarget - isaTarget),
+    lockableAnnual * (irpBase + (isLong ? 0.03 : 0) + (state.age >= 50 ? 0.02 : 0)) * pensionRiskScale,
   );
   const foreignTarget = annual * Math.max(
     0.03,
@@ -180,17 +240,19 @@ function buildPlan() {
   );
   const amounts = { ...userAmounts, dc: dcContribution };
 
-  return { amountByAccount: amounts, allocation: normalizeAllocation(amounts), dcContribution, salaryProfile: profile };
+  return { amountByAccount: amounts, allocation: normalizeAllocation(amounts), dcContribution, salaryProfile: profile, gates };
 }
 
 function calculate() {
-  const { allocation, amountByAccount, dcContribution, salaryProfile: profile } = buildPlan();
+  const { allocation, amountByAccount, dcContribution, salaryProfile: profile, gates } = buildPlan();
   const annual = state.annualAmount;
   const expectedReturn = state.expectedReturn / 100;
   const pensionEligible = Math.min(amountByAccount.pension, 600);
   const irpEligible = Math.min(amountByAccount.irp, Math.max(0, 900 - pensionEligible));
   const creditRate = profile.pensionCreditRate;
-  const pensionCredit = (pensionEligible + irpEligible) * creditRate;
+  const rawPensionCredit = (pensionEligible + irpEligible) * creditRate;
+  const pensionCredit = Math.min(rawPensionCredit, Math.max(0, state.taxDue));
+  const lostPensionCredit = Math.max(0, rawPensionCredit - pensionCredit);
 
   const isaGain = amountByAccount.isa * expectedReturn * 3;
   const isaExemption = profile.isaExemption;
@@ -211,6 +273,14 @@ function calculate() {
   const regularWealth = annualContribution * factor;
   const optimizedWealth = (annualContribution + annualDefense) * factor;
   const gap = optimizedWealth - regularWealth;
+  const riskPenalty =
+    (gates.isaBlocked ? 16 : 0) +
+    (gates.liquidityWatch ? 10 : 0) +
+    (gates.pensionIncomeWatch ? 8 : 0) +
+    (gates.healthSensitive && gates.financialInsuranceWatch ? 8 : 0) +
+    (gates.financialComprehensiveWatch ? 8 : 0) +
+    (lostPensionCredit > 0 ? 8 : 0) +
+    (state.taxDue < 50 ? 6 : 0);
   const score = clamp(
     Math.round(
       48 +
@@ -218,7 +288,8 @@ function calculate() {
         (allocation.pension + allocation.irp) * 0.22 +
         allocation.dc * 0.1 -
         allocation.foreign * 0.13 +
-        (annualDefense / Math.max(annual, 1)) * 95,
+        (annualDefense / Math.max(annual, 1)) * 95 -
+        riskPenalty,
     ),
     0,
     100,
@@ -230,7 +301,10 @@ function calculate() {
     annualContribution,
     dcContribution,
     salaryProfile: profile,
+    gates,
+    rawPensionCredit,
     pensionCredit,
+    lostPensionCredit,
     isaSaving,
     foreignTax,
     annualDefense,
@@ -248,6 +322,69 @@ function futureValueFactor(rate, years) {
   return ((1 + rate) ** years - 1) / rate;
 }
 
+function riskGateFor(result) {
+  const items = [];
+  const gates = result.gates;
+
+  if (gates.isaBlocked) {
+    items.push("최근 금융소득종합과세 이력이 있으면 ISA 신규 가입이 제한될 수 있습니다.");
+  } else if (state.isaRoom !== LIMITS.isaAnnual) {
+    items.push(`ISA 배분은 입력한 올해 납입 여력 ${formatManwon(state.isaRoom)} 안에서만 계산했습니다.`);
+  }
+
+  if (result.lostPensionCredit > 0) {
+    items.push(`결정세액 부족으로 연금 세액공제 약 ${formatManwon(result.lostPensionCredit)}은 환급 효과에서 제외했습니다.`);
+  } else if (state.taxDue < 50) {
+    items.push(`예상 결정세액이 ${formatManwon(state.taxDue)}이라 연금 세액공제 계좌 배분을 보수적으로 낮췄습니다.`);
+  }
+
+  if (gates.liquidityWatch) {
+    items.push(`3년 내 필요자금 ${formatManwon(gates.nearTermNeed)}은 ISA·연금계좌보다 유동성 버킷이 우선입니다.`);
+  }
+
+  if (gates.pensionIncomeWatch) {
+    items.push("사적연금 연 1,500만원 경계에서는 연금 수령 방식과 과세 선택을 먼저 점검합니다.");
+  }
+
+  if (gates.healthSensitive && gates.financialInsuranceWatch) {
+    items.push("피부양자·은퇴 예정자는 금융소득이 건보료 산정 소득에 반영되는지 확인해야 합니다.");
+  }
+
+  if (gates.financialComprehensiveWatch) {
+    items.push("금융소득 2,000만원 이상 구간은 종합과세와 ISA 적격성 확인이 먼저입니다.");
+  }
+
+  if (state.persona === "global") {
+    items.push("달러 보유 자체가 목적이라면 ISA 내 원화 ETF 대체가 환노출 목표와 맞는지 별도 검토합니다.");
+  }
+
+  if (state.age >= 58 || state.horizon <= 5) {
+    items.push("은퇴가 가깝거나 기간이 짧으면 DC형 원리금보장 상품도 방어 자산 후보입니다.");
+  }
+
+  if (items.length < 3) {
+    items.push("부부 공동 자금은 명의별 한도와 배우자 증여 공제 범위를 나눠서 봅니다.");
+  }
+  if (items.length < 3) {
+    items.push("ISA·연금계좌는 혜택보다 먼저 최소 보유 기간과 중도해지 비용을 확인합니다.");
+  }
+  if (items.length < 3) {
+    items.push("해외주식 기본공제 활용은 손익통산, 결제일, 환전·매매 비용을 같이 비교합니다.");
+  }
+
+  const severe = [
+    gates.isaBlocked,
+    gates.pensionIncomeWatch,
+    gates.healthSensitive && gates.financialInsuranceWatch,
+    gates.financialComprehensiveWatch,
+    result.lostPensionCredit > 0,
+    state.taxDue < 50,
+  ].filter(Boolean).length;
+  const level = severe >= 2 || gates.isaBlocked ? "주의 높음" : severe === 1 || gates.liquidityWatch ? "조건부 진행" : "기본 통과";
+
+  return { level, items: items.slice(0, 4) };
+}
+
 function adviceFor(result) {
   const allocation = result.allocation;
   const taxShelterShare = allocation.isa + allocation.pension + allocation.irp + allocation.dc;
@@ -257,14 +394,81 @@ function adviceFor(result) {
   const dividendTax = state.dividendIncome * 0.154;
   const lead = leadAccount(allocation);
   const dcShareOfPool = (result.dcContribution / Math.max(result.annualContribution, 1)) * 100;
+  const gates = result.gates;
+
+  if (gates.isaBlocked) {
+    return {
+      title: "ISA 가입 결격 가능성이 먼저입니다. 최근 금융소득종합과세 이력이 있으면 ISA 배분은 제외하고 시작해야 합니다.",
+      items: [
+        "ISA를 0원으로 두고, 일반 계좌·연금계좌·해외직투의 세후 비용을 다시 비교합니다.",
+        `현재 금융소득 입력값은 연 ${formatManwon(state.financialIncome)}입니다. 가입 가능 여부는 최근 3개 과세기간 이력을 확인해야 합니다.`,
+        "고액 자산가는 절세 계좌 한도보다 건보료, 종합과세, 유동성 제약을 먼저 검증합니다.",
+      ],
+    };
+  }
+
+  if (result.lostPensionCredit > 0) {
+    return {
+      title: "연금 세액공제는 환급 가능한 세금 안에서만 의미가 있습니다. 결정세액을 넘는 공제액은 이번 계산에서 제외했습니다.",
+      items: [
+        `예상 결정세액 ${formatManwon(state.taxDue)} 대비 소멸 가능 공제액은 약 ${formatManwon(result.lostPensionCredit)}입니다.`,
+        "환급받을 세금이 작다면 연금계좌 한도 채우기보다 ISA, 현금성 자금, 일반 계좌 유동성을 먼저 봅니다.",
+        "연금 납입은 세액공제 액션이 아니라 55세 이후까지 묶어둘 수 있는 장기 자금인지로 재판단합니다.",
+      ],
+    };
+  }
+
+  if (state.taxDue < 50 && state.annualAmount >= 900) {
+    return {
+      title: "예상 결정세액이 작습니다. 연금 한도 채우기보다 환급 가능한 세금 규모부터 확인해야 합니다.",
+      items: [
+        `입력한 예상 결정세액은 ${formatManwon(state.taxDue)}입니다.`,
+        "연금저축·IRP는 공제 한도보다 실제 환급 가능한 세금이 먼저입니다.",
+        "돌려받을 세금이 작다면 ISA 납입 여력, 일반 계좌 유동성, 단기 목표자금을 우선 배치합니다.",
+      ],
+    };
+  }
+
+  if (gates.liquidityWatch) {
+    return {
+      title: "3년 안에 필요한 자금이 큽니다. 절세 계좌보다 유동성 방어가 먼저입니다.",
+      items: [
+        `입력한 3년 내 필요자금은 ${formatManwon(gates.nearTermNeed)}이고, 묶어둘 수 있는 금액은 약 ${formatManwon(gates.lockableAnnual)}입니다.`,
+        "ISA는 최소 3년을 통과할 돈만 넣고, 연금저축·IRP는 중도해지 세금까지 감당 가능한 금액으로 제한합니다.",
+        "전세, 청약, 대출상환, 결혼자금처럼 일정이 있는 돈은 절세 점수 계산에서 별도 현금 버킷으로 빼야 합니다.",
+      ],
+    };
+  }
+
+  if (gates.healthSensitive && gates.financialInsuranceWatch) {
+    return {
+      title: "금융소득이 건보료 경계에 걸립니다. 세금보다 건강보험료와 피부양자 자격을 먼저 확인해야 합니다.",
+      items: [
+        `현재 금융소득 입력값은 연 ${formatManwon(state.financialIncome)}입니다.`,
+        "피부양자 또는 은퇴 예정자는 금융소득이 보험료 산정 소득에 반영되는지 확인한 뒤 배당·분배금 자산을 배치합니다.",
+        "절세계좌 만기 자금을 연금계좌로 넘길 때도 향후 연금 수령액과 건보료 영향을 함께 봅니다.",
+      ],
+    };
+  }
+
+  if (gates.pensionIncomeWatch) {
+    return {
+      title: "예상 사적연금 수령액이 1,500만원 경계에 있습니다. 과세이연보다 수령 설계가 먼저입니다.",
+      items: [
+        `입력한 예상 사적연금 수령액은 연 ${formatManwon(state.privatePensionIncome)}입니다.`,
+        "연금저축·IRP 납입을 늘리기 전에 수령 기간, 국민연금, 다른 소득, 분리과세 선택 가능성을 함께 계산합니다.",
+        "ISA 만기 전환 10% 세액공제도 유동성 락인과 향후 연금 수령액 증가를 같이 따져야 합니다.",
+      ],
+    };
+  }
 
   if (result.dcContribution >= 700 && dcShareOfPool >= 18 && (state.horizon >= 10 || state.age >= 45)) {
     return {
-      title: "총급여 기준 DC 회사부담금이 커졌습니다. 퇴직연금 적립금을 별도 계좌가 아니라 핵심 장기 자산으로 봐야 합니다.",
+      title: "총급여 기준 DC 회사부담금이 커졌습니다. 퇴직연금은 나이와 금리 환경에 맞춰 방어·성장 비중을 다시 정해야 합니다.",
       items: [
         `연 총급여 ${formatManwon(state.totalSalary)} 기준 DC 회사부담금 추정액은 연 ${formatManwon(result.dcContribution)}입니다.`,
         `향후 1년 투자/운용 풀에서 DC형이 차지하는 비중은 약 ${Math.round(dcShareOfPool)}%입니다.`,
-        "원리금보장 상품에 오래 방치되어 있다면 연금저축·IRP와 합산해 위험자산 비중을 다시 맞춥니다.",
+        state.age >= 58 || state.horizon <= 5 ? "은퇴가 가까우면 고금리 원리금보장 상품도 방어 전략이 될 수 있습니다." : "은퇴까지 시간이 남았다면 원리금보장·실적배당 비중을 연금저축·IRP와 합산해 점검합니다.",
       ],
     };
   }
@@ -275,7 +479,7 @@ function adviceFor(result) {
       items: [
         `연간 투자금 ${formatManwon(state.annualAmount)} 구간에서는 추천 1순위가 ${lead}입니다.`,
         `연금저축·IRP·DC형 합산 비중은 ${pensionStack}%로 낮춰, 급한 지출 때문에 장기 계좌를 깨는 일을 줄입니다.`,
-        state.horizon < 7 ? "투자 기간이 짧으므로 세액공제보다 3년 전후 목돈 사용 가능성을 먼저 봅니다." : "기간이 길어질수록 연금저축을 소액 자동납입으로 붙여도 부담이 작아집니다.",
+        state.horizon < 7 ? "투자 기간이 짧으므로 세액공제보다 최소 3년 이상 묶어둘 수 있는 금액을 먼저 봅니다." : "기간이 길어질수록 연금저축을 소액 자동납입으로 붙여도 부담이 작아집니다.",
       ],
     };
   }
@@ -296,7 +500,7 @@ function adviceFor(result) {
       title: "해외주식 실현이익이 큰 구간입니다. 지금은 계좌 비중보다 매도 시점과 손익통산 관리가 더 중요합니다.",
       items: [
         `해외주식 양도세 노출 추정치는 연 ${formatManwon(foreignTaxExposure)}입니다.`,
-        "실현이익을 한 해에 몰지 말고 손실 종목, 환율, 매도 연도를 같이 봅니다.",
+        "실현이익을 한 해에 몰지 말고 손실 종목, 환율, 결제일, 매도 연도를 같이 봅니다.",
         `해외직투 비중은 ${allocation.foreign}%로 두되, 일부 글로벌 노출은 ISA·연금계좌 안의 국내 상장 해외 ETF와 비교합니다.`,
       ],
     };
@@ -330,7 +534,7 @@ function adviceFor(result) {
       items: [
         `해외주식 양도세 노출 추정치는 연 ${formatManwon(foreignTaxExposure)}입니다.`,
         `해외직투 비중 ${allocation.foreign}%와 ISA 비중 ${allocation.isa}%를 함께 보며 글로벌 노출을 나눕니다.`,
-        "실현이익이 커지는 해에는 손실 통산, 매도 분산, 국내 상장 해외 ETF 대체 가능성을 같이 검토합니다.",
+        "실현이익이 커지는 해에는 손실 통산, 매도 분산, 거래비용, 국내 상장 해외 ETF 대체 가능성을 같이 검토합니다.",
       ],
     };
   }
@@ -380,6 +584,12 @@ function updateLabels() {
   qs("#salaryLabel").textContent = formatManwon(state.totalSalary);
   qs("#horizonLabel").textContent = `${state.horizon}년`;
   qs("#returnLabel").textContent = `${state.expectedReturn.toFixed(1)}%`;
+  qs("#nearTermNeedLabel").textContent = formatManwon(state.nearTermNeed);
+  qs("#taxDueLabel").textContent = formatManwon(state.taxDue);
+  qs("#isaRoomLabel").textContent = formatManwon(state.isaRoom);
+  qs("#financialIncomeLabel").textContent = formatManwon(state.financialIncome);
+  qs("#privatePensionLabel").textContent = formatManwon(state.privatePensionIncome);
+  qs("#profileLabel").textContent = TAX_PROFILE_LABELS[state.taxProfile] ?? "일반";
 }
 
 function renderAllocation(allocation, amountByAccount, result) {
@@ -429,8 +639,8 @@ function drawWealthChart(result) {
   const rate = state.expectedReturn / 100;
   const points = Array.from({ length: state.horizon + 1 }, (_, year) => {
     const factor = futureValueFactor(rate, year);
-    const regular = state.annualAmount * factor;
-    const optimized = (state.annualAmount + result.annualDefense) * factor;
+    const regular = result.annualContribution * factor;
+    const optimized = (result.annualContribution + result.annualDefense) * factor;
     return { year, regular, optimized };
   });
   const maxValue = Math.max(...points.map((point) => point.optimized), 1);
@@ -470,10 +680,10 @@ function drawWealthChart(result) {
     context.stroke();
   };
 
-  drawLine("regular", "#8792a8", 3);
-  drawLine("optimized", "#20bd82", 4);
+  drawLine("regular", "#7a8594", 3);
+  drawLine("optimized", "#4d7c65", 4);
 
-  context.fillStyle = "#111827";
+  context.fillStyle = "#171a1f";
   context.font = "700 12px system-ui, sans-serif";
   context.fillText("일반", width - right - 84, y(points.at(-1).regular) + 4);
   context.fillText("절세 조합", width - right - 84, y(points.at(-1).optimized) - 8);
@@ -486,15 +696,18 @@ function render() {
   updateLabels();
   const result = calculate();
   const advice = adviceFor(result);
+  const riskGate = riskGateFor(result);
   qs("#savingMetric").textContent = formatManwon(result.annualDefense);
   qs("#compoundMetric").textContent = formatManwon(result.compound);
   qs("#compoundCaption").textContent = `연 ${state.expectedReturn.toFixed(1)}% · ${state.horizon}년 재투자`;
   qs("#scoreMetric").textContent = String(result.score);
-  qs("#scoreCaption").textContent = result.score >= 78 ? "절세 우선" : result.score >= 62 ? "균형 조합" : "공격형 조합";
+  qs("#scoreCaption").textContent = riskGate.level;
   qs("#gapMetric").textContent = `차이 ${formatManwon(result.gap)}`;
-  qs("#chartAssumption").textContent = `시장 예측이 아니라 연 ${state.expectedReturn.toFixed(1)}% 기대수익률 가정 · 연 투자금+DC 추정액+절세액 재투자`;
+  qs("#chartAssumption").textContent = `시장 예측이 아니라 연 ${state.expectedReturn.toFixed(1)}% 기대수익률 가정 · 연 투자금+DC 추정액+리스크 차감 절세액 재투자`;
   qs("#oneLineAdvice").textContent = advice.title;
   qs("#actionItems").innerHTML = advice.items.map((item) => `<li>${item}</li>`).join("");
+  qs("#riskLevel").textContent = riskGate.level;
+  qs("#riskItems").innerHTML = riskGate.items.map((item) => `<li>${item}</li>`).join("");
   qs("#heroTaxDrag").textContent = `연 ${formatManwon(result.annualDefense)}`;
   qs("#heroRegular").textContent = `세후 ${formatManwon(result.regularWealth)}`;
   qs("#heroOptimized").textContent = `세후 ${formatManwon(result.optimizedWealth)}`;
@@ -506,9 +719,10 @@ function applyPersona(persona) {
   state.persona = persona;
   Object.assign(state, personaDefaults[persona]);
   qsa(".persona-switch button").forEach((button) => button.classList.toggle("active", button.dataset.value === persona));
-  ["age", "annualAmount", "foreignGain", "dividendIncome", "totalSalary", "horizon", "expectedReturn"].forEach((id) => {
+  numericFields.forEach((id) => {
     qs(`#${id}`).value = state[id];
   });
+  qs("#taxProfile").value = state.taxProfile;
   render();
 }
 
@@ -517,11 +731,15 @@ function bindControls() {
     button.addEventListener("click", () => applyPersona(button.dataset.value));
   });
 
-  ["age", "annualAmount", "foreignGain", "dividendIncome", "totalSalary", "horizon", "expectedReturn"].forEach((id) => {
+  numericFields.forEach((id) => {
     qs(`#${id}`).addEventListener("input", (event) => {
       state[id] = Number(event.target.value);
       render();
     });
+  });
+  qs("#taxProfile").addEventListener("change", (event) => {
+    state.taxProfile = event.target.value;
+    render();
   });
 }
 
